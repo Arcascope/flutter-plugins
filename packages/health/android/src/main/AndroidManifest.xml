@@ -1,3 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="cachet.plugins.health">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="cachet.plugins.health">
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
+    <application>
+        <activity
+            android:name=".HealthConnectPermissionActivity"
+            android:theme="@style/NormalTheme"
+            android:exported="true">
+            <!-- (a) reference permissions resource -->
+            <meta-data
+                android:name="health_permissions"
+                android:resource="@array/health_permissions" />
+            <!-- (b) handle intent -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+    </application>
 </manifest>
