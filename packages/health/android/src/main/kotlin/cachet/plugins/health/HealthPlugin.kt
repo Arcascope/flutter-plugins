@@ -120,22 +120,82 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         mainScope.launch {
             val healthConnectClient = HealthConnectClient.getOrCreate(activity!!)
 
-            val serializedResult = dataHandlerHealthConnect(
-                healthConnectClient.readRecords(ReadRecordsRequest(field, timeRangeFilter))
-            )
+            val resultInHash = if (field == SleepStageRecord::class) {
+                val sleepStageRecords = healthConnectClient.readRecords(
+                    ReadRecordsRequest(
+                        SleepStageRecord::class, timeRangeFilter
+                    )
+                )
 
-            activity!!.runOnUiThread { result.success(serializedResult) }
+                val sleepSessionRecords =
+                    healthConnectClient.readRecords(ReadRecordsRequest(field, timeRangeFilter))
+
+                handleSleepData(
+                    type, sleepSessionRecords, sleepStageRecords
+                )
+            } else {
+                dataHandlerHealthConnect(
+                    healthConnectClient.readRecords(ReadRecordsRequest(field, timeRangeFilter))
+                )
+            }
+
+            activity!!.runOnUiThread {
+                result.success(resultInHash)
+            }
         }
     }
 
+    private fun handleSleepData(
+        type: String,
+        // todo: do more research on sleepSessionRecords
+        // in my understanding sleepSession includes all the stages of sleeps
+        sleepSessionRecords: ReadRecordsResponse<out Record>,
+        sleepStageRecords: ReadRecordsResponse<SleepStageRecord>
+    ): List<HashMap<String, Any>> {
+        when (type) {
+            SLEEP_ASLEEP -> {
+                return sleepStageRecords.records.mapNotNull {
+                    if (it.stage == SleepStageRecord.StageType.DEEP) {
+                        it.toHashMap()
+                    } else {
+                        null
+
+                    }
+                }
+            }
+            SLEEP_AWAKE -> {
+                return sleepStageRecords.records.mapNotNull {
+                    if (it.stage == SleepStageRecord.StageType.OUT_OF_BED) {
+                        it.toHashMap()
+                    } else {
+                        null
+
+                    }
+                }
+            }
+            SLEEP_IN_BED -> {
+                return sleepStageRecords.records.mapNotNull {
+                    if (it.stage == SleepStageRecord.StageType.SLEEPING) {
+                        it.toHashMap()
+                    } else {
+                        null
+
+                    }
+                }
+            }
+            else -> return emptyList()
+        }
+
+    }
 
     private fun dataHandlerHealthConnect(
         result: ReadRecordsResponse<out Record>
     ): List<java.util.HashMap<String, Any>> {
-       return result.records.map {
+        return result.records.map {
             when (it) {
                 is StepsRecord -> it.toHashMap()
                 is HeartRateRecord -> it.toHashMap()
+                is SleepStageRecord -> it.toHashMap()
                 else -> throw IllegalArgumentException("Unsupported dataType: $result")
             }
         }
@@ -178,18 +238,34 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
     }
 
     private fun getTotalStepsInInterval(call: MethodCall, result: Result) {
-        val start = call.argument<Long>(START_TIME)!!
-        val end = call.argument<Long>(END_TIME)!!
+        val startTime = call.argument<Long>(START_TIME)!!
+        val endTime = call.argument<Long>(END_TIME)!!
 
         val activity = activity ?: return
 
-        val stepsDataType = keyToHealthConnectDataType(STEPS)
-        val aggregatedDataType = keyToHealthConnectDataType(AGGREGATE_STEP_COUNT)
+        val field = getFieldHealthConnect(STEPS)
 
-        // todo implement getTotalStepsInInterval
+        val timeRangeFilter = TimeRangeFilter.between(
+            Instant.ofEpochMilli(startTime), Instant.ofEpochMilli(endTime)
+        )
+
+        mainScope.launch {
+            val healthConnectClient = HealthConnectClient.getOrCreate(activity)
+            val stepRecords =
+                healthConnectClient.readRecords(ReadRecordsRequest(field, timeRangeFilter))
+
+            var totalCount = 0L
+            stepRecords.records.forEach {
+                if (it is StepsRecord) {
+                    totalCount += it.count
+                }
+            }
+
+            activity.runOnUiThread { result.success(totalCount) }
+        }
     }
 
-    /// Handle calls from the MethodChannel
+    // Handle calls from the MethodChannel
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "requestAuthorization" -> requestAuthorization(call, result)
@@ -197,7 +273,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
             "hasPermissions" -> hasPermissions(call, result)
 //            todo: implement the rest of the functions
 //            "writeData" -> writeData(call, result)
-//            "getTotalStepsInInterval" -> getTotalStepsInInterval(call, result)
+            "getTotalStepsInInterval" -> getTotalStepsInInterval(call, result)
 //            "writeWorkoutData" -> writeWorkoutData(call, result)
             else -> result.notImplemented()
         }
@@ -249,6 +325,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         const val START_TIME = "startTime"
         const val END_TIME = "endTime"
         const val VALUE = "value"
+        const val MINUTES = "MINUTES"
 
         const val DATE_FROM = "date_from"
         const val DATE_TO = "date_to"

@@ -60,9 +60,9 @@ fun getFieldHealthConnect(type: String): KClass<out Record> {
 //      MOVE_MINUTES -> Field.FIELD_DURATION
 //      DISTANCE_DELTA -> Field.FIELD_DISTANCE
 //      WATER -> Field.FIELD_VOLUME
-//      SLEEP_ASLEEP -> Field.FIELD_SLEEP_SEGMENT_TYPE
-//      SLEEP_AWAKE -> Field.FIELD_SLEEP_SEGMENT_TYPE
-//      SLEEP_IN_BED -> Field.FIELD_SLEEP_SEGMENT_TYPE
+        SLEEP_ASLEEP -> SleepStageRecord::class
+        SLEEP_AWAKE -> SleepStageRecord::class
+        SLEEP_IN_BED -> SleepStageRecord::class
 //      WORKOUT -> Field.FIELD_ACTIVITY
 //      BODY_FAT_PERCENTAGE -> Field.FIELD_PERCENTAGE
 //      HEIGHT -> Field.FIELD_HEIGHT
@@ -90,9 +90,9 @@ fun keyToHealthConnectDataType(type: String): KClass<out Record> {
 //        ACTIVE_ENERGY_BURNED -> DataType.TYPE_CALORIES_EXPENDED
 //        MOVE_MINUTES -> DataType.TYPE_MOVE_MINUTES
 //        DISTANCE_DELTA -> DataType.TYPE_DISTANCE_DELTA
-//        SLEEP_ASLEEP -> DataType.TYPE_SLEEP_SEGMENT
-//        SLEEP_AWAKE -> DataType.TYPE_SLEEP_SEGMENT
-//        SLEEP_IN_BED -> DataType.TYPE_SLEEP_SEGMENT
+        SLEEP_ASLEEP -> SleepStageRecord::class
+        SLEEP_AWAKE -> SleepStageRecord::class
+        SLEEP_IN_BED -> SleepStageRecord::class
 //        WORKOUT -> DataType.TYPE_ACTIVITY_SEGMENT
         else -> throw IllegalArgumentException("Unsupported dataType: $type")
     }
