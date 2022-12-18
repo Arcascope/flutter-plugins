@@ -47,8 +47,7 @@ class HealthConnectPermissionActivity : ComponentActivity(),
     }
 
     private suspend fun checkPermissionsAndRun(
-        healthConnectClient: HealthConnectClient,
-        permission: Set<HealthPermission>
+        healthConnectClient: HealthConnectClient, permission: Set<HealthPermission>
     ) {
         val granted = healthConnectClient.permissionController.getGrantedPermissions(permission)
         if (granted.containsAll(permission)) {
@@ -89,5 +88,15 @@ class HealthConnectPermissionActivity : ComponentActivity(),
                 putExtra(PERMISSIONS, permissions)
                 putExtra(TYPES, types)
             }
+
+        suspend fun hasAllRequiredPermissions(
+            context: Context, arguments: Pair<List<String>, List<Int>>
+        ): Boolean {
+            val healthConnectClient = HealthConnectClient.getOrCreate(context)
+            val permissions = callToHealthConnectTypes(arguments.first, arguments.second).toSet()
+            val granted =
+                healthConnectClient.permissionController.getGrantedPermissions(permissions)
+            return granted.containsAll(permissions)
+        }
     }
 }

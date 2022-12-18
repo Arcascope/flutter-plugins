@@ -229,11 +229,23 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         _result = result
 
         activity?.run {
-            startActivityForResult(
-                HealthConnectPermissionActivity.open(
-                    this, ArrayList(arguments.first), ArrayList(arguments.second)
-                ), HealthConnectPermissionActivity.RESULT
-            )
+            val appContext = this.applicationContext
+
+            mainScope.launch {
+                if (HealthConnectPermissionActivity.hasAllRequiredPermissions(
+                        appContext,
+                        arguments
+                    )
+                ) {
+                    result.success(true)
+                } else {
+                    startActivityForResult(
+                        HealthConnectPermissionActivity.open(
+                            appContext, ArrayList(arguments.first), ArrayList(arguments.second)
+                        ), HealthConnectPermissionActivity.RESULT
+                    )
+                }
+            }
         }
     }
 
@@ -271,9 +283,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
             "requestAuthorization" -> requestAuthorization(call, result)
             "getData" -> getData(call, result)
             "hasPermissions" -> hasPermissions(call, result)
+            "getTotalStepsInInterval" -> getTotalStepsInInterval(call, result)
 //            todo: implement the rest of the functions
 //            "writeData" -> writeData(call, result)
-            "getTotalStepsInInterval" -> getTotalStepsInInterval(call, result)
 //            "writeWorkoutData" -> writeWorkoutData(call, result)
             else -> result.notImplemented()
         }
