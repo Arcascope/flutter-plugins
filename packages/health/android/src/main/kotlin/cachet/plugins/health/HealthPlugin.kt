@@ -8,7 +8,6 @@ import androidx.annotation.NonNull
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.ReadRecordsRequest
-import androidx.health.connect.client.response.ReadRecordsResponse
 import androidx.health.connect.client.time.TimeRangeFilter
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -121,21 +120,19 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
             val healthConnectClient = HealthConnectClient.getOrCreate(activity!!)
 
             val resultInHash = if (field == SleepStageRecord::class) {
-                val sleepStageRecords = healthConnectClient.readRecords(
-                    ReadRecordsRequest(
-                        SleepStageRecord::class, timeRangeFilter
-                    )
+                val sleepStageRecords = healthConnectClient.readAllRecords(
+                    SleepStageRecord::class, timeRangeFilter
                 )
 
                 val sleepSessionRecords =
-                    healthConnectClient.readRecords(ReadRecordsRequest(field, timeRangeFilter))
+                    healthConnectClient.readAllRecords(field, timeRangeFilter)
 
                 handleSleepData(
                     type, sleepSessionRecords, sleepStageRecords
                 )
             } else {
                 dataHandlerHealthConnect(
-                    healthConnectClient.readRecords(ReadRecordsRequest(field, timeRangeFilter))
+                    healthConnectClient.readAllRecords(field, timeRangeFilter)
                 )
             }
 
@@ -149,12 +146,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         type: String,
         // todo: do more research on sleepSessionRecords
         // in my understanding sleepSession includes all the stages of sleeps
-        sleepSessionRecords: ReadRecordsResponse<out Record>,
-        sleepStageRecords: ReadRecordsResponse<SleepStageRecord>
+        sleepSessionRecords: MutableList<out Record>,
+        sleepStageRecords: MutableList<SleepStageRecord>
     ): List<HashMap<String, Any>> {
         when (type) {
             SLEEP_ASLEEP -> {
-                return sleepStageRecords.records.mapNotNull {
+                return sleepStageRecords.mapNotNull {
                     if (it.stage == SleepStageRecord.StageType.DEEP) {
                         it.toHashMap()
                     } else {
@@ -164,7 +161,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
                 }
             }
             SLEEP_AWAKE -> {
-                return sleepStageRecords.records.mapNotNull {
+                return sleepStageRecords.mapNotNull {
                     if (it.stage == SleepStageRecord.StageType.OUT_OF_BED) {
                         it.toHashMap()
                     } else {
@@ -174,7 +171,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
                 }
             }
             SLEEP_IN_BED -> {
-                return sleepStageRecords.records.mapNotNull {
+                return sleepStageRecords.mapNotNull {
                     if (it.stage == SleepStageRecord.StageType.SLEEPING) {
                         it.toHashMap()
                     } else {
@@ -189,9 +186,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
     }
 
     private fun dataHandlerHealthConnect(
-        result: ReadRecordsResponse<out Record>
+        result: MutableList<out Record>
     ): List<java.util.HashMap<String, Any>> {
-        return result.records.map {
+        return result.map {
             when (it) {
                 is StepsRecord -> it.toHashMap()
                 is HeartRateRecord -> it.toHashMap()
@@ -214,7 +211,25 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
     }
 
     private fun hasPermissions(call: MethodCall, result: Result) {
-        requestAuthorization(call, result)
+        val arguments = parseCallArguments(call)
+
+        if (activity == null) {
+            result.success(false)
+            return
+        }
+
+        mainScope.launch {
+            val hasPermission = HealthConnectPermissionActivity.hasAllRequiredPermissions(
+                activity!!,
+                arguments
+            )
+
+            if(hasPermission) {
+                result.success(true)
+            } else {
+                result.success(false)
+            }
+        }
     }
 
     /// Called when the "requestAuthorization" is invoked from Flutter
