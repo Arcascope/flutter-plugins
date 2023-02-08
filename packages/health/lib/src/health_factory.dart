@@ -68,6 +68,14 @@ class HealthFactory {
     });
   }
 
+
+  /// Check if user have health connect installed. 
+  ///
+  /// Not supported on iOS and method does nothing.
+  static Future<bool> healthConnectExist() async {
+    return await _channel.invokeMethod('healthConnectExist');
+  }
+
   /// Revoke permissions obtained earlier.
   ///
   /// Not supported on iOS and method does nothing.

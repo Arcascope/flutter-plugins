@@ -292,6 +292,11 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         }
     }
 
+    private fun isHealthConnectExist(call: MethodCall, result: Result) {
+        activity ?: result.success(false)
+        result.success(HealthConnectClient.isAvailable(activity!!))
+    }
+
     // Handle calls from the MethodChannel
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
@@ -299,6 +304,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
             "getData" -> getData(call, result)
             "hasPermissions" -> hasPermissions(call, result)
             "getTotalStepsInInterval" -> getTotalStepsInInterval(call, result)
+            "healthConnectExist" -> isHealthConnectExist(call, result)
 //            todo: implement the rest of the functions
 //            "writeData" -> writeData(call, result)
 //            "writeWorkoutData" -> writeWorkoutData(call, result)

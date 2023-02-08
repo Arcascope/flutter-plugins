@@ -30,11 +30,16 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         super.onCreate(savedInstanceState)
         setContentView(R.layout.health)
 
-        setOfPermissions = getPermissions()
-        val healthConnectClient = HealthConnectClient.getOrCreate(this)
+        if (HealthConnectClient.isAvailable(this)) {
+            setOfPermissions = getPermissions()
+            val healthConnectClient = HealthConnectClient.getOrCreate(this)
 
-        mainScope.launch {
-            checkPermissionsAndRun(healthConnectClient, setOfPermissions)
+            mainScope.launch {
+                checkPermissionsAndRun(healthConnectClient, setOfPermissions)
+            }
+        } else {
+            setResult(Activity.RESULT_CANCELED)
+            finish()
         }
     }
 
@@ -92,11 +97,15 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         suspend fun hasAllRequiredPermissions(
             context: Context, arguments: Pair<List<String>, List<Int>>
         ): Boolean {
-            val healthConnectClient = HealthConnectClient.getOrCreate(context)
-            val permissions = callToHealthConnectTypes(arguments.first, arguments.second).toSet()
-            val granted =
-                healthConnectClient.permissionController.getGrantedPermissions(permissions)
-            return granted.containsAll(permissions)
+            if (HealthConnectClient.isAvailable(context)) {
+                val healthConnectClient = HealthConnectClient.getOrCreate(context)
+                val permissions =
+                    callToHealthConnectTypes(arguments.first, arguments.second).toSet()
+                val granted =
+                    healthConnectClient.permissionController.getGrantedPermissions(permissions)
+                return granted.containsAll(permissions)
+            }
+            return false;
         }
     }
 }
