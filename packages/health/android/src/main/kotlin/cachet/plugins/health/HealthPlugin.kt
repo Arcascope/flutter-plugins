@@ -117,27 +117,32 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         )
 
         mainScope.launch {
-            val healthConnectClient = HealthConnectClient.getOrCreate(activity!!)
+            try {
+                val healthConnectClient = HealthConnectClient.getOrCreate(activity!!)
 
-            val resultInHash = if (field == SleepStageRecord::class) {
-                val sleepStageRecords = healthConnectClient.readAllRecords(
-                    SleepStageRecord::class, timeRangeFilter
-                )
+                val resultInHash = if (field == SleepStageRecord::class) {
+                    val sleepStageRecords = healthConnectClient.readAllRecords(
+                        SleepStageRecord::class, timeRangeFilter
+                    )
 
-                val sleepSessionRecords =
-                    healthConnectClient.readAllRecords(field, timeRangeFilter)
+                    val sleepSessionRecords =
+                        healthConnectClient.readAllRecords(field, timeRangeFilter)
 
-                handleSleepData(
-                    type, sleepSessionRecords, sleepStageRecords
-                )
-            } else {
-                dataHandlerHealthConnect(
-                    healthConnectClient.readAllRecords(field, timeRangeFilter)
-                )
-            }
+                    handleSleepData(
+                        type, sleepSessionRecords, sleepStageRecords
+                    )
+                } else {
+                    dataHandlerHealthConnect(
+                        healthConnectClient.readAllRecords(field, timeRangeFilter)
+                    )
+                }
 
-            activity!!.runOnUiThread {
-                result.success(resultInHash)
+                activity!!.runOnUiThread {
+                    result.success(resultInHash)
+                }
+            } catch(e:Exception) {
+                // send an empty list.
+                result.success(listOf<HashMap<String,Any>>());
             }
         }
     }
