@@ -28,18 +28,18 @@ var SLEEP_AWAKE = "SLEEP_AWAKE"
 var SLEEP_IN_BED = "SLEEP_IN_BED"
 var WORKOUT = "WORKOUT"
 
-fun callToHealthConnectTypes(types: List<String>, permissions: List<Int>): List<HealthPermission> {
-    val healthPermissions = mutableListOf<HealthPermission>()
+fun callToHealthConnectTypes(types: List<String>, permissions: List<Int>): List<String> {
+    val healthPermissions = mutableListOf<String>()
 
     for ((i, typeKey) in types.withIndex()) {
         val access = permissions[i]
         val dataType = keyToHealthConnectDataType(typeKey)
         when (access) {
-            0 -> healthPermissions.add(HealthPermission.createReadPermission(dataType))
-            1 -> healthPermissions.add(HealthPermission.createWritePermission(dataType))
+            0 -> healthPermissions.add(HealthPermission.getReadPermission(dataType))
+            1 -> healthPermissions.add(HealthPermission.getWritePermission(dataType))
             2 -> {
-                healthPermissions.add(HealthPermission.createReadPermission(dataType))
-                healthPermissions.add(HealthPermission.createWritePermission(dataType))
+                healthPermissions.add(HealthPermission.getReadPermission(dataType))
+                healthPermissions.add(HealthPermission.getWritePermission(dataType))
             }
             else -> throw IllegalArgumentException("Unknown access type $access")
         }

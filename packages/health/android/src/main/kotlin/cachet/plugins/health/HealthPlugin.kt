@@ -157,7 +157,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         when (type) {
             SLEEP_ASLEEP -> {
                 return sleepStageRecords.mapNotNull {
-                    if (it.stage == SleepStageRecord.StageType.DEEP) {
+                    if (it.stage == SleepStageRecord.STAGE_TYPE_DEEP) {
                         it.toHashMap()
                     } else {
                         null
@@ -167,7 +167,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
             }
             SLEEP_AWAKE -> {
                 return sleepStageRecords.mapNotNull {
-                    if (it.stage == SleepStageRecord.StageType.OUT_OF_BED) {
+                    if (it.stage == SleepStageRecord.STAGE_TYPE_OUT_OF_BED) {
                         it.toHashMap()
                     } else {
                         null
@@ -177,7 +177,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
             }
             SLEEP_IN_BED -> {
                 return sleepStageRecords.mapNotNull {
-                    if (it.stage == SleepStageRecord.StageType.SLEEPING) {
+                    if (it.stage == SleepStageRecord.STAGE_TYPE_SLEEPING) {
                         it.toHashMap()
                     } else {
                         null
@@ -299,7 +299,8 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
 
     private fun isHealthConnectExist(call: MethodCall, result: Result) {
         activity ?: result.success(false)
-        result.success(HealthConnectClient.isAvailable(activity!!))
+        val availabilityStatus = HealthConnectClient.sdkStatus(activity!!)
+        result.success(availabilityStatus == HealthConnectClient.SDK_AVAILABLE)
     }
 
     // Handle calls from the MethodChannel

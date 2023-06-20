@@ -9,11 +9,13 @@ import androidx.activity.result.ActivityResultCallback
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.StepsRecord
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
 class HealthConnectPermissionActivity : ComponentActivity(),
-    ActivityResultCallback<Set<HealthPermission>> {
+    ActivityResultCallback<Set<String>> {
 
     private val mainScope = MainScope()
 
@@ -24,13 +26,15 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         requestPermissionActivityContract, this
     )
 
-    var setOfPermissions = emptySet<HealthPermission>()
+    var setOfPermissions = emptySet<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.health)
 
-        if (HealthConnectClient.isAvailable(this)) {
+        val availabilityStatus = HealthConnectClient.sdkStatus(this)
+
+        if (availabilityStatus == HealthConnectClient.SDK_AVAILABLE) {
             setOfPermissions = getPermissions()
             val healthConnectClient = HealthConnectClient.getOrCreate(this)
 
@@ -43,7 +47,7 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         }
     }
 
-    override fun onActivityResult(result: Set<HealthPermission>) {
+    override fun onActivityResult(result: Set<String>) {
         if (result.containsAll(setOfPermissions)) {
             permissionGranted()
         } else {
@@ -52,9 +56,10 @@ class HealthConnectPermissionActivity : ComponentActivity(),
     }
 
     private suspend fun checkPermissionsAndRun(
-        healthConnectClient: HealthConnectClient, permission: Set<HealthPermission>
+        healthConnectClient: HealthConnectClient, permission: Set<String>
     ) {
-        val granted = healthConnectClient.permissionController.getGrantedPermissions(permission)
+        val granted = healthConnectClient.permissionController.getGrantedPermissions()
+
         if (granted.containsAll(permission)) {
             permissionGranted()
         } else {
@@ -62,7 +67,7 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         }
     }
 
-    private fun getPermissions(): Set<HealthPermission> {
+    private fun getPermissions(): Set<String> {
         intent.extras?.run {
             val permissions = this.getIntegerArrayList(PERMISSIONS)!!.toList()
             val types = this.getStringArrayList(TYPES)!!.toList()
@@ -97,12 +102,13 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         suspend fun hasAllRequiredPermissions(
             context: Context, arguments: Pair<List<String>, List<Int>>
         ): Boolean {
-            if (HealthConnectClient.isAvailable(context)) {
+            val availabilityStatus = HealthConnectClient.sdkStatus(context)
+            if (availabilityStatus == HealthConnectClient.SDK_AVAILABLE) {
                 val healthConnectClient = HealthConnectClient.getOrCreate(context)
                 val permissions =
                     callToHealthConnectTypes(arguments.first, arguments.second).toSet()
                 val granted =
-                    healthConnectClient.permissionController.getGrantedPermissions(permissions)
+                    healthConnectClient.permissionController.getGrantedPermissions()
                 return granted.containsAll(permissions)
             }
             return false;
