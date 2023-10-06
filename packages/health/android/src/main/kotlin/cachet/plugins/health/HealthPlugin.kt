@@ -299,7 +299,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
 
     private fun isHealthConnectExist(call: MethodCall, result: Result) {
         activity ?: result.success(false)
-        val availabilityStatus = HealthConnectClient.sdkStatus(activity!!)
+        val availabilityStatus = HealthConnectClient.getSdkStatus(activity!!)
         result.success(availabilityStatus == HealthConnectClient.SDK_AVAILABLE)
     }
 

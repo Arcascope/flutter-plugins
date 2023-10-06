@@ -25,7 +25,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion 31
+    compileSdkVersion 34
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -42,7 +42,7 @@ android {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 
-    implementation "androidx.health.connect:connect-client:1.0.0-alpha11"
+    implementation "androidx.health.connect:connect-client:1.1.0-alpha05"
     // we do need newer version of activity that supports health connect on result callbacks
     implementation "androidx.activity:activity-ktx:1.6.1"
 }

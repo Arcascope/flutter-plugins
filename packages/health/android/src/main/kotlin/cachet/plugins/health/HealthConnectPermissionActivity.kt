@@ -32,7 +32,7 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         super.onCreate(savedInstanceState)
         setContentView(R.layout.health)
 
-        val availabilityStatus = HealthConnectClient.sdkStatus(this)
+        val availabilityStatus = HealthConnectClient.getSdkStatus(this)
 
         if (availabilityStatus == HealthConnectClient.SDK_AVAILABLE) {
             setOfPermissions = getPermissions()
@@ -102,7 +102,7 @@ class HealthConnectPermissionActivity : ComponentActivity(),
         suspend fun hasAllRequiredPermissions(
             context: Context, arguments: Pair<List<String>, List<Int>>
         ): Boolean {
-            val availabilityStatus = HealthConnectClient.sdkStatus(context)
+            val availabilityStatus = HealthConnectClient.getSdkStatus(context)
             if (availabilityStatus == HealthConnectClient.SDK_AVAILABLE) {
                 val healthConnectClient = HealthConnectClient.getOrCreate(context)
                 val permissions =
