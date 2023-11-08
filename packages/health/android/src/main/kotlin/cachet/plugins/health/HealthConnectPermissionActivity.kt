@@ -11,6 +11,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
+import io.flutter.plugin.common.MethodCall
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
