@@ -1634,15 +1634,33 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         scope.launch {
             try {
                 MapToHCType[dataType]?.let { classType ->
-                    val request = ReadRecordsRequest(
+                   val records = mutableListOf<Record>()
+
+                    var request = ReadRecordsRequest(
                         recordType = classType,
+                        pageSize = 5000,
                         timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
                     )
-                    val response = healthConnectClient.readRecords(request)
+                    var response = healthConnectClient.readRecords(request)
+                    var pageToken = response.pageToken;
+
+                    records.addAll(response.records)
+
+                    while (pageToken != null) {
+                        request = ReadRecordsRequest(
+                            recordType = classType,
+                            pageSize = 5000,
+                            timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
+                            pageToken = pageToken
+                        )
+                        response = healthConnectClient.readRecords(request)
+                        pageToken = response.pageToken
+                        records.addAll(response.records)
+                    }
 
                     // Workout needs distance and total calories burned too
                     if (dataType == WORKOUT) {
-                        for (rec in response.records) {
+                        for (rec in records) {
                             val record = rec as ExerciseSessionRecord
                             val distanceRequest = healthConnectClient.readRecords(
                                 ReadRecordsRequest(
@@ -1677,8 +1695,10 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
                             healthConnectData.add(
                                 // mapOf(
                                 mapOf<String, Any?>(
-                                    "workoutActivityType" to (workoutTypeMapHealthConnect.filterValues { it == record.exerciseType }.keys.firstOrNull()
-                                        ?: "OTHER"),
+                                    "workoutActivityType" to (
+                                            workoutTypeMapHealthConnect.filterValues { it == record.exerciseType }.keys.firstOrNull()
+                                                ?: "OTHER"
+                                            ),
                                     "totalDistance" to if (totalDistance == 0.0) null else totalDistance,
                                     "totalDistanceUnit" to "METER",
                                     "totalEnergyBurned" to if (totalEnergyBurned == 0.0) null else totalEnergyBurned,
@@ -1693,7 +1713,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
                         }
                         // Filter sleep stages for requested stage
                     } else if (classType == SleepSessionRecord::class) {
-                        for (rec in response.records) {
+                        for (rec in records) {
                             if (rec is SleepSessionRecord) {
                                 rec.stages.forEach {
                                     if (dataType == MapSleepStageToType[it.stage]) {
@@ -1703,7 +1723,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
                             }
                         }
                     } else {
-                        for (rec in response.records) {
+                        for (rec in records) {
                             healthConnectData.addAll(convertRecord(rec, dataType))
                         }
                     }
