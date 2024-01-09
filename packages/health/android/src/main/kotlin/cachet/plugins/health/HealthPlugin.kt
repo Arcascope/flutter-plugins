@@ -1646,7 +1646,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
 
                     records.addAll(response.records)
 
-                    while (pageToken != null) {
+                    while (!pageToken.isNullOrBlank()) {
                         request = ReadRecordsRequest(
                             recordType = classType,
                             pageSize = 5000,
