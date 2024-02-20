@@ -56,6 +56,9 @@ enum HealthDataType {
   IRREGULAR_HEART_RATE_EVENT,
   ELECTRODERMAL_ACTIVITY,
   ELECTROCARDIOGRAM,
+
+  // Arcascope
+  RAW_DATA,
 }
 
 /// Access types for Health Data.
@@ -146,6 +149,7 @@ const List<HealthDataType> _dataTypeKeysAndroid = [
   HealthDataType.BASAL_ENERGY_BURNED,
   HealthDataType.RESPIRATORY_RATE,
   HealthDataType.NUTRITION,
+  HealthDataType.RAW_DATA,
 ];
 
 /// Maps a [HealthDataType] to a [HealthDataUnit].
@@ -208,6 +212,8 @@ const Map<HealthDataType, HealthDataUnit> _dataTypeToUnit = {
   HealthDataType.ELECTROCARDIOGRAM: HealthDataUnit.VOLT,
 
   HealthDataType.NUTRITION: HealthDataUnit.NO_UNIT,
+
+  HealthDataType.RAW_DATA: HealthDataUnit.COUNT,
 };
 
 const PlatformTypeJsonValue = {

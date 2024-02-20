@@ -53,5 +53,5 @@ const List<HealthDataType> dataTypesIOS = [
 
 /// List of data types available on Android
 const List<HealthDataType> dataTypesAndroid = [
-  HealthDataType.STEPS,
+  HealthDataType.RAW_DATA,
 ];

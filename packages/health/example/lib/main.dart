@@ -56,13 +56,15 @@ class _HealthAppState extends State<HealthApp> {
   final permissions = types.map((e) => HealthDataAccess.READ_WRITE).toList();
 
   // create a HealthFactory for use in the app
-  HealthFactory health = HealthFactory(useHealthConnectIfAvailable: true);
+  HealthFactory health = HealthFactory();
 
   bool healthConnectInstalled = false;
 
   @override
   void initState() {
     super.initState();
+
+    health.useHealthConnectIfAvailableIn(true);
 
     health.healthConnectAvailable().then((value) {
       setState(() {

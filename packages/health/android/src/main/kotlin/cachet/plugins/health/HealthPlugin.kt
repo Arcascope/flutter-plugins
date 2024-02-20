@@ -354,6 +354,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL_NAME)
         channel?.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
+
         threadPoolExecutor = Executors.newFixedThreadPool(4)
         checkAvailability()
         if (healthConnectAvailable) {
@@ -1465,6 +1466,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         binding.addActivityResultListener(this)
         activity = binding.activity
 
+        val serviceIntent = Intent(activity!!, AccelerometerService::class.java)
+        activity!!.startForegroundService(serviceIntent)
+
         if (healthConnectAvailable) {
             val requestPermissionActivityContract =
                 PermissionController.createRequestPermissionResultContract()
@@ -1630,7 +1634,40 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
         val dataType = call.argument<String>("dataTypeKey")!!
         val startTime = Instant.ofEpochMilli(call.argument<Long>("startTime")!!)
         val endTime = Instant.ofEpochMilli(call.argument<Long>("endTime")!!)
+
+
         val healthConnectData = mutableListOf<Map<String, Any?>>()
+
+        if(dataType == "RAW_DATA") {
+            scope.launch {
+                val boxStore = AccelerometerService.boxStore
+
+                val currentZone = ZoneId.systemDefault()
+                val startTimeZone = ZonedDateTime.ofInstant(startTime, currentZone).toLocalDateTime()
+                val endTimeZone = ZonedDateTime.ofInstant(endTime, currentZone).toLocalDateTime()
+
+                val minuteAverageBox = boxStore.boxFor(MinuteAverage::class.java)
+                val all = minuteAverageBox.query().build().find().last()
+                Log.d("Alll", "${all.timestamp}")
+                val query = minuteAverageBox.query().between(MinuteAverage_.timestamp, startTimeZone.toEpochSecond(ZoneOffset.UTC),endTimeZone.toEpochSecond(ZoneOffset.UTC)).build()
+
+                val mappedResult = query.find().map {
+                    mapOf<String, Any>(
+                        "value" to it.average,
+                        "date_from" to it.timestamp.toInstant(ZoneOffset.UTC).toEpochMilli(),
+                        "date_to" to it.timestamp.toInstant(ZoneOffset.UTC).toEpochMilli(),
+                        "source_id" to "",
+                        "source_name" to "arcascope",
+                    )
+                }
+
+                healthConnectData.addAll(mappedResult)
+
+                Handler(context!!.mainLooper).run { result.success(healthConnectData) }
+            }
+            return
+        }
+
         scope.launch {
             try {
                 MapToHCType[dataType]?.let { classType ->
