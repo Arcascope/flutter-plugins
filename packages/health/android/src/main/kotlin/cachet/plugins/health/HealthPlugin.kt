@@ -1643,19 +1643,15 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
                 val boxStore = AccelerometerService.boxStore
 
                 val currentZone = ZoneId.systemDefault()
-                val startTimeZone = ZonedDateTime.ofInstant(startTime, currentZone).toLocalDateTime()
-                val endTimeZone = ZonedDateTime.ofInstant(endTime, currentZone).toLocalDateTime()
 
                 val minuteAverageBox = boxStore.boxFor(MinuteAverage::class.java)
-                val all = minuteAverageBox.query().build().find().last()
-                Log.d("Alll", "${all.timestamp}")
-                val query = minuteAverageBox.query().between(MinuteAverage_.timestamp, startTimeZone.toEpochSecond(ZoneOffset.UTC),endTimeZone.toEpochSecond(ZoneOffset.UTC)).build()
+                val query = minuteAverageBox.query().between(MinuteAverage_.timestamp, startTime.toEpochMilli(),endTime.toEpochMilli()).build()
 
                 val mappedResult = query.find().map {
                     mapOf<String, Any>(
                         "value" to it.average,
-                        "date_from" to it.timestamp.toInstant(ZoneOffset.UTC).toEpochMilli(),
-                        "date_to" to it.timestamp.toInstant(ZoneOffset.UTC).toEpochMilli(),
+                        "date_from" to LocalDateTimeConverter().convertToDatabaseValue(it.timestamp)!!,
+                        "date_to" to  LocalDateTimeConverter().convertToDatabaseValue(it.timestamp)!!,
                         "source_id" to "",
                         "source_name" to "arcascope",
                     )
