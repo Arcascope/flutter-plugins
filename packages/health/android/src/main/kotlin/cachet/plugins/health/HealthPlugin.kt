@@ -1518,51 +1518,60 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
 
     private fun hasPermissionsHC(call: MethodCall, result: Result) {
         val args = call.arguments as HashMap<*, *>
-        val types = (args["types"] as? ArrayList<*>)?.filterIsInstance<String>()!!
+        var types = (args["types"] as? ArrayList<*>)?.filterIsInstance<String>()!!
         val permissions = (args["permissions"] as? ArrayList<*>)?.filterIsInstance<Int>()!!
+
+        types = types.toMutableList()
+        types.remove("RAW_DATA")
 
         var permList = mutableListOf<String>()
         for ((i, typeKey) in types.withIndex()) {
-            val access = permissions[i]!!
-            val dataType = MapToHCType[typeKey]!!
-            if (access == 0) {
-                permList.add(
-                    HealthPermission.getReadPermission(dataType),
-                )
-            } else {
-                permList.addAll(
-                    listOf(
-                        HealthPermission.getReadPermission(dataType),
-                        HealthPermission.getWritePermission(dataType),
-                    ),
-                )
-            }
-            // Workout also needs distance and total energy burned too
-            if (typeKey == WORKOUT) {
+
+                val access = permissions[i]!!
+                val dataType = MapToHCType[typeKey]!!
                 if (access == 0) {
-                    permList.addAll(
-                        listOf(
-                            HealthPermission.getReadPermission(DistanceRecord::class),
-                            HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
-                        ),
+                    permList.add(
+                        HealthPermission.getReadPermission(dataType),
                     )
                 } else {
                     permList.addAll(
                         listOf(
-                            HealthPermission.getReadPermission(DistanceRecord::class),
-                            HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
-                            HealthPermission.getWritePermission(DistanceRecord::class),
-                            HealthPermission.getWritePermission(TotalCaloriesBurnedRecord::class),
+                            HealthPermission.getReadPermission(dataType),
+                            HealthPermission.getWritePermission(dataType),
                         ),
                     )
                 }
+                // Workout also needs distance and total energy burned too
+                if (typeKey == WORKOUT) {
+                    if (access == 0) {
+                        permList.addAll(
+                            listOf(
+                                HealthPermission.getReadPermission(DistanceRecord::class),
+                                HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+                            ),
+                        )
+                    } else {
+                        permList.addAll(
+                            listOf(
+                                HealthPermission.getReadPermission(DistanceRecord::class),
+                                HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+                                HealthPermission.getWritePermission(DistanceRecord::class),
+                                HealthPermission.getWritePermission(TotalCaloriesBurnedRecord::class),
+                            ),
+                        )
+                    }
+                }
+
+            scope.launch {
+                try {
+                    result.success(
+                        healthConnectClient.permissionController.getGrantedPermissions()
+                            .containsAll(permList),
+                    )
+                } catch (e:Exception) {
+
+                }
             }
-        }
-        scope.launch {
-            result.success(
-                healthConnectClient.permissionController.getGrantedPermissions()
-                    .containsAll(permList),
-            )
         }
     }
 
@@ -1640,24 +1649,24 @@ class HealthPlugin(private var channel: MethodChannel? = null) : MethodCallHandl
 
         if(dataType == "RAW_DATA") {
             scope.launch {
-                val boxStore = AccelerometerService.boxStore
 
-                val currentZone = ZoneId.systemDefault()
 
-                val minuteAverageBox = boxStore.boxFor(MinuteAverage::class.java)
-                val query = minuteAverageBox.query().between(MinuteAverage_.timestamp, startTime.toEpochMilli(),endTime.toEpochMilli()).build()
+                val daoSession: DaoSession = AccelerometerService.daoMaster.newSession()
+                val result2 = daoSession.minuateAvergageJDao.queryBuilder().where(MinuateAvergageJDao.Properties.Timestamp.between(startTime.toEpochMilli(),endTime.toEpochMilli())).build().list()
+//                val result2 = daoSession.minuateAvergageJDao.queryBuilder().build().list()
 
-                val mappedResult = query.find().map {
+                val mappedResult = result2.map {
                     mapOf<String, Any>(
                         "value" to it.average,
-                        "date_from" to LocalDateTimeConverter().convertToDatabaseValue(it.timestamp)!!,
-                        "date_to" to  LocalDateTimeConverter().convertToDatabaseValue(it.timestamp)!!,
+                        "date_from" to it.timestamp!!,
+                        "date_to" to  it.timestamp!!,
                         "source_id" to "",
                         "source_name" to "arcascope",
                     )
                 }
 
                 healthConnectData.addAll(mappedResult)
+
 
                 Handler(context!!.mainLooper).run { result.success(healthConnectData) }
             }

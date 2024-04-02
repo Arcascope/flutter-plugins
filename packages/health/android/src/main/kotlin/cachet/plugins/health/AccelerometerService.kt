@@ -15,9 +15,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.RequiresApi
-import io.objectbox.BoxStore
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlin.math.sqrt
 
@@ -39,7 +37,25 @@ class AccelerometerService : Service(), SensorEventListener {
     override fun onCreate() {
         super.onCreate()
 
-        boxStore = MyObjectBox.builder().androidContext(this).build()
+
+        val helper = DaoMaster.DevOpenHelper(this, "12test2231", null)
+        val db = helper.writableDatabase
+        daoMaster = DaoMaster(db)
+
+//        val helper: DaoMaster.DevOpenHelper = DevOpenHelper(this, "mydatabase", null)
+//
+//        db = helper.getWritableDatabase()
+//        val daoMaster = DaoMaster(db)
+//        val daoSession: DaoSession = daoMaster.newSession()
+//
+//        Realm.init(this)
+//        val config: RealmConfiguration = RealmConfiguration.Builder().name("sampler") .schemaVersion(1)
+//            .allowQueriesOnUiThread(true)
+//            .allowWritesOnUiThread(true)
+//            .build()
+//        Realm.setDefaultConfiguration(config)
+
+//        boxStore = MyObjectBox.builder().androidContext(this).build()
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)!!
@@ -48,6 +64,7 @@ class AccelerometerService : Service(), SensorEventListener {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
             "MyApp::AccelerometerWakeLock")
+
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -69,20 +86,56 @@ class AccelerometerService : Service(), SensorEventListener {
     private val dataStore = mutableListOf<CalculationResult>()
     private var lastMinute = -1
 
+    var gravSensorVals: FloatArray? = null
+
+    private val gravity = FloatArray(3)
+    private val linear_acceleration = FloatArray(3)
+
+    protected fun lowPass(input: FloatArray, output: FloatArray?): FloatArray? {
+        if (output == null) return input
+        for (i in input.indices) {
+            output[i] = output[i] + 0.25f * (input[i] - output[i])
+        }
+        return output
+    }
+
     override fun onSensorChanged(event: SensorEvent) {
+
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+
+            val alpha = 0.8f
+
+            gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0]
+            gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1]
+            gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2]
+
+            linear_acceleration[0] = event.values[0] - gravity[0]
+            linear_acceleration[1] = event.values[1] - gravity[1]
+            linear_acceleration[2] = event.values[2] - gravity[2]
+
+            gravSensorVals = lowPass(event.values.clone(), gravSensorVals);
+
+//            val x = gravSensorVals?.get(0);
+//            val y = gravSensorVals?.get(1);
+//            val z = gravSensorVals?.get(2);
+
+//            val x = linear_acceleration?.get(0);
+//            val y = linear_acceleration?.get(1);
+//            val z = linear_acceleration?.get(2);
+
             val x = event.values[0]
             val y = event.values[1]
             val z = event.values[2]
 
             val timestamp = LocalDateTime.now()
-            val result = calculateR(x,y,z)
+            val result = calculateR(x!!,y!!,z!!)
 
             dataStore.add(CalculationResult(timestamp, result))
 
             val currentMinute = timestamp.minute
             if (currentMinute != lastMinute) {
                 val minuteData = dataStore.filter { it.timestamp.minute == currentMinute }.map { it.result }
+                dataStore.clear()
                 if (minuteData.isNotEmpty()) {
                     val average = minuteData.average()
                     storeAndCalculateAverage(average, timestamp)
@@ -98,13 +151,32 @@ class AccelerometerService : Service(), SensorEventListener {
     }
 
     private fun storeAndCalculateAverage(average: Double, timestamp: LocalDateTime) {
-        val minuteAverageBox = boxStore.boxFor(MinuteAverage::class.java)
 
-        val oneMonthAgo = LocalDateTime.now().minusMonths(1).atOffset(ZoneOffset.UTC).toEpochSecond()
-        minuteAverageBox.query().less(MinuteAverage_.timestamp, oneMonthAgo).build().remove()
 
-        val minuteAverage = MinuteAverage(average = average, timestamp = timestamp);
-        minuteAverageBox.put(minuteAverage)
+//        val minuteAverageBox = boxStore.boxFor(MinuteAverage::class.java)
+//
+
+        val oneMonthAgo = LocalDateTimeConverter().convertToDatabaseValue(LocalDateTime.now().minusHours(1))
+//
+//        Realm.getDefaultInstance().executeTransaction(Realm.Transaction {
+//            it.where(MinuteAverageRealm::class.java).lessThan("MinuteAverageRealm",oneMonthAgo).findAll().deleteAllFromRealm()
+//        }).
+
+//        minuteAverageBox.query().less(MinuteAverage_.timestamp, oneMonthAgo).build().remove()
+
+//        val minuteAverageRealm = MinuteAverageRealm()
+//        minuteAverageRealm.average = average;
+//        minuteAverageRealm.timestamp =  LocalDateTimeConverter().convertToDatabaseValue(timestamp);
+//        Realm.getDefaultInstance().insert(minuteAverageRealm)
+//        minuteAverageBox.put(minuteAverage)
+
+        val daoSession: DaoSession = daoMaster.newSession()
+
+        val minuteAverage = MinuateAvergageJ()
+        minuteAverage.average = average
+        minuteAverage.timestamp = LocalDateTimeConverter().convertToDatabaseValue(timestamp)
+
+        daoSession.minuateAvergageJDao.insert(minuteAverage)
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -132,8 +204,7 @@ class AccelerometerService : Service(), SensorEventListener {
         }
     }
 
-
     companion object {
-        lateinit var boxStore: BoxStore
+        lateinit var daoMaster:DaoMaster;
     }
 }
