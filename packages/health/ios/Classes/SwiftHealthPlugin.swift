@@ -148,7 +148,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
     let SLEEP_IN_BED = "SLEEP_IN_BED"
     let SLEEP_LIGHT = "SLEEP_LIGHT"
     let SLEEP_REM = "SLEEP_REM"
-    
+    let TIME_IN_DAYLIGHT = "TIME_IN_DAYLIGHT"
     let EXERCISE_TIME = "EXERCISE_TIME"
     let WORKOUT = "WORKOUT"
     let HEADACHE_UNSPECIFIED = "HEADACHE_UNSPECIFIED"
@@ -1623,6 +1623,10 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
             workoutActivityTypeMap["SOCIAL_DANCE"] = HKWorkoutActivityType.socialDance
             workoutActivityTypeMap["PICKLEBALL"] = HKWorkoutActivityType.pickleball
             workoutActivityTypeMap["COOLDOWN"] = HKWorkoutActivityType.cooldown
+        }
+      
+        if #available(iOS 17.0, *) {
+          dataTypesDict[TIME_IN_DAYLIGHT] = HKObjectType.quantityType(forIdentifier: .timeInDaylight)!
         }
 
         if #available(iOS 16.0, *) {

@@ -107,7 +107,10 @@ enum HealthDataType {
   ELECTROCARDIOGRAM,
 
   // Health Connect
-  TOTAL_CALORIES_BURNED
+  TOTAL_CALORIES_BURNED,
+
+  // New in iOS 17 (specific to Apple Watch)
+  TIME_IN_DAYLIGHT
 }
 
 /// Access types for Health Data.
@@ -212,6 +215,7 @@ const List<HealthDataType> dataTypeKeysIOS = [
   HealthDataType.MENSTRUATION_FLOW,
   HealthDataType.WATER_TEMPERATURE,
   HealthDataType.UNDERWATER_DEPTH,
+  HealthDataType.TIME_IN_DAYLIGHT
 ];
 
 /// List of data types available on Android
@@ -365,6 +369,9 @@ const Map<HealthDataType, HealthDataUnit> dataTypeToUnit = {
 
   // Health Connect
   HealthDataType.TOTAL_CALORIES_BURNED: HealthDataUnit.KILOCALORIE,
+
+  // Time in Daylight (Apple Watch, iOS 17)
+  HealthDataType.TIME_IN_DAYLIGHT: HealthDataUnit.MINUTE,
 };
 
 // const PlatformTypeJsonValue = {
