@@ -2504,8 +2504,20 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     }
 
     private fun stopStepSensorBackgroundService(call: MethodCall, result: Result) {
-        val serviceIntent = Intent(activity!!, StepCounterService::class.java)
-        activity!!.stopService(serviceIntent)
+        try {
+            if (activity == null || context == null) {
+                result.success(false)
+                return
+            }
+            val serviceIntent = Intent(activity!!, StepCounterService::class.java)
+            val stopped = activity!!.stopService(serviceIntent)
+            
+            result.success(stopped)
+        } catch (e: Exception) {
+            Log.e("FLUTTER_HEALTH::ERROR", "Failed to stop step sensor service: ${e.message}")
+            Log.e("FLUTTER_HEALTH::ERROR", e.stackTrace.toString())
+            result.success(false)
+        }
     }
 
     private fun startStepSensorBackgroundService(call: MethodCall, result: Result) {
