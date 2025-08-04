@@ -70,7 +70,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:20.2.0")
 
     // The new health connect api
-    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
     def fragment_version = "1.6.2"
     implementation "androidx.fragment:fragment-ktx:$fragment_version"
 

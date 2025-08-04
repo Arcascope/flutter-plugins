@@ -20,8 +20,11 @@ import androidx.annotation.NonNull
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.feature.ExperimentalFeatureAvailabilityApi
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.records.MealType.MEAL_TYPE_BREAKFAST
 import androidx.health.connect.client.records.MealType.MEAL_TYPE_DINNER
@@ -1476,15 +1479,19 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
         val healthConnectData = mutableListOf<Map<String, Any?>>()
 
-        if(dataType == STEPS && StepCounterService.initiated()) {
-            val items = StepCounterService.box.boxFor(SensorStep::class.java).query(SensorStep_.startTime.between(startTime.toEpochMilli(),endTime.toEpochMilli())).build().find()
+        if (dataType == STEPS && StepCounterService.initiated()) {
+            val items = StepCounterService.box.boxFor(SensorStep::class.java).query(
+                SensorStep_.startTime.between(
+                    startTime.toEpochMilli(),
+                    endTime.toEpochMilli()
+                )
+            ).build().find()
             healthConnectData.addAll(items.map {
                 mapOf<String, Any>(
                     "value" to
                             it.count,
                     "date_from" to
-                            it.startTime!!
-                    ,
+                            it.startTime!!,
                     "date_to" to
                             it.endTime!!,
                     "source_id" to "",
@@ -1502,7 +1509,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         val startTime = Instant.ofEpochMilli(call.argument<Long>("startTime")!!)
         val endTime = Instant.ofEpochMilli(call.argument<Long>("endTime")!!)
 
-        val items = StepCounterService.box.boxFor(SensorStep::class.java).query(SensorStep_.startTime.between(startTime.toEpochMilli(),endTime.toEpochMilli())).build().find()
+        val items = StepCounterService.box.boxFor(SensorStep::class.java)
+            .query(SensorStep_.startTime.between(startTime.toEpochMilli(), endTime.toEpochMilli()))
+            .build().find()
         var totalResult = 0.0
         items.forEach {
             totalResult += it.count;
@@ -2465,6 +2474,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             "hasPermissions" -> hasPermissions(call, result)
             "requestAuthorization" -> requestAuthorization(call, result)
             "revokePermissions" -> revokePermissions(call, result)
+            "requestBackgroundFetchIfAvailable" -> requestBackgroundFetchIfAvailable(call, result)
             "getData" -> getData(call, result)
             "getIntervalData" -> getIntervalData(call, result)
             "writeData" -> writeData(call, result)
@@ -2485,6 +2495,40 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         }
     }
 
+    @OptIn(ExperimentalFeatureAvailabilityApi::class)
+    private fun requestBackgroundFetchIfAvailable(call: MethodCall, result: Result) {
+        if (healthConnectClient
+                .features
+                .getFeatureStatus(
+                    HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND
+                ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+        ) {
+            scope.launch {
+                val grantedPermissions =
+                    healthConnectClient.permissionController.getGrantedPermissions()
+                if (PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in grantedPermissions) {
+                    val requestPermissionActivityContract =
+                        PermissionController.createRequestPermissionResultContract()
+
+                    val healthConnectRequestPermissionsLauncher =
+                        (activity as ComponentActivity).registerForActivityResult(
+                            requestPermissionActivityContract
+                        ) { granted -> result.success(true) }
+
+                    healthConnectRequestPermissionsLauncher.launch(
+                        setOf(PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+                    )
+                } else {
+                    result.success(true)
+                }
+            }
+
+        }
+
+        result.success(false)
+    }
+
+
     private fun isForegroundServiceRunning(context: Context, serviceClass: Class<*>): Boolean {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         for (service in activityManager.getRunningServices(Int.MAX_VALUE)) {
@@ -2496,8 +2540,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     }
 
     private fun isStepSensorRunning(call: MethodCall, result: Result) {
-        result.success(isForegroundServiceRunning(context!!,StepCounterService::class.java))
+        result.success(isForegroundServiceRunning(context!!, StepCounterService::class.java))
     }
+
     private fun clearStepSensorData(call: MethodCall, result: Result) {
         StepCounterService.box.boxFor(SensorStep::class.java).removeAll()
         result.success(true)
@@ -2511,7 +2556,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             }
             val serviceIntent = Intent(activity!!, StepCounterService::class.java)
             val stopped = activity!!.stopService(serviceIntent)
-            
+
             result.success(stopped)
         } catch (e: Exception) {
             Log.e("FLUTTER_HEALTH::ERROR", "Failed to stop step sensor service: ${e.message}")
@@ -2542,7 +2587,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         try {
             val serviceIntent = Intent(activity!!, StepCounterService::class.java)
             ContextCompat.startForegroundService(context!!, serviceIntent)
-        } catch (e:Exception) {
+        } catch (e: Exception) {
             Log.d("HealthPlugin", e.toString());
         }
     }
@@ -2571,7 +2616,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             (activity as ComponentActivity).registerForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { granted ->
-                if(granted.isNotEmpty() && granted.values.first()) {
+                if (granted.isNotEmpty() && granted.values.first()) {
                     startStepSenor()
                     mResult?.success(true)
                     return@registerForActivityResult
@@ -2799,7 +2844,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 val records = mutableListOf<Record>()
 
                 val granted = healthConnectClient.permissionController.getGrantedPermissions()
-                if(!granted.contains(HealthPermission.getReadPermission(classType))) {
+                if (!granted.contains(HealthPermission.getReadPermission(classType))) {
                     Log.d("Health Plugin", "No Permission granted for $dataType")
                     return@let
                 }
