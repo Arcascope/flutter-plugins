@@ -16,6 +16,11 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.gms.fitness.FitnessLocal
+import com.google.android.gms.fitness.LocalRecordingClient
+import com.google.android.gms.fitness.data.LocalDataType
 import io.objectbox.BoxStore
 
 

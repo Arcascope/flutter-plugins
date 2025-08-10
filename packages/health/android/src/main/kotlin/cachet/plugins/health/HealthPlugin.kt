@@ -1,6 +1,7 @@
 package cachet.plugins.health
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.Service
@@ -17,7 +18,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.NonNull
-import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
@@ -38,18 +38,24 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessActivities
+import com.google.android.gms.fitness.FitnessLocal
 import com.google.android.gms.fitness.FitnessOptions
+import com.google.android.gms.fitness.LocalRecordingClient
 import com.google.android.gms.fitness.data.*
 import com.google.android.gms.fitness.request.DataDeleteRequest
 import com.google.android.gms.fitness.request.DataReadRequest
+import com.google.android.gms.fitness.request.LocalDataReadRequest
 import com.google.android.gms.fitness.request.SessionInsertRequest
 import com.google.android.gms.fitness.request.SessionReadRequest
 import com.google.android.gms.fitness.result.DataReadResponse
 import com.google.android.gms.fitness.result.SessionReadResponse
 import com.google.android.gms.tasks.OnFailureListener
 import com.google.android.gms.tasks.OnSuccessListener
+import com.google.android.gms.tasks.Tasks
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -81,6 +87,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     private var context: Context? = null
     private var threadPoolExecutor: ExecutorService? = null
     private var useHealthConnectIfAvailable: Boolean = false
+    private var stepSensorActive: Boolean = false
     private var healthConnectRequestPermissionsLauncher: ActivityResultLauncher<Set<String>>? =
         null
     private var activityRecognitionPermissionLauncher: ActivityResultLauncher<Array<String>>? =
@@ -1317,6 +1324,20 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     /** Get all datapoints of the DataType within the given time range */
     private fun getData(call: MethodCall, result: Result) {
 
+        if (stepSensorActive) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    fetchCacheData(10)
+                } catch (e: Exception) {
+                    // ignore
+                }
+                withContext(Dispatchers.Main) {
+                    getSensorData(call, result)
+                }
+            }
+            return
+        }
+
         if (StepCounterService.initiated()) {
             getSensorData(call, result)
             return
@@ -1479,7 +1500,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
         val healthConnectData = mutableListOf<Map<String, Any?>>()
 
-        if (dataType == STEPS && StepCounterService.initiated()) {
+        if (dataType == STEPS) {
             val items = StepCounterService.box.boxFor(SensorStep::class.java).query(
                 SensorStep_.startTime.between(
                     startTime.toEpochMilli(),
@@ -2306,10 +2327,87 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             }
     }
 
+    private fun lastSyncTime(): ZonedDateTime {
+        return Instant.ofEpochSecond(
+            activity!!.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+                .getLong(
+                    "last_q_epoch",
+                    LocalDateTime.now().atZone(ZoneId.systemDefault()).minusHours(1).toEpochSecond()
+                )
+        ).atZone(ZoneId.systemDefault())
+    }
+
+    private fun updateLastSyncTime(atZone: ZonedDateTime) {
+        activity!!.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_q_epoch", atZone.toEpochSecond())
+            .apply()
+    }
+
+    private suspend fun fetchCacheData(duration: Int = 10) {
+
+        val queryEndTime = LocalDateTime.now().atZone(ZoneId.systemDefault())
+        val queryStartTime = lastSyncTime()
+        val readRequest =
+            LocalDataReadRequest.Builder()
+                .aggregate(LocalDataType.TYPE_STEP_COUNT_DELTA)
+                .bucketByTime(duration, TimeUnit.SECONDS)
+                .setTimeRange(
+                    queryStartTime.toEpochSecond(),
+                    queryEndTime.toEpochSecond(),
+                    TimeUnit.SECONDS
+                )
+                .build()
+        val localRecordingClient = FitnessLocal.getLocalRecordingClient(activity!!)
+        val result = Tasks.await(localRecordingClient.readData(readRequest))
+        val data = result.buckets.flatMap { bucket -> bucket.dataSets.flatMap { it.dataPoints } }
+        val sensorStepData = data.map { each ->
+            SensorStep().apply {
+                startTime = each.getStartTime(TimeUnit.MILLISECONDS)
+                endTime = each.getEndTime(TimeUnit.MILLISECONDS)
+                count = each.getValue(LocalField.FIELD_STEPS).asInt().toDouble()
+            }
+        }
+        if (sensorStepData.isNotEmpty()) {
+            updateLastSyncTime(LocalDateTime.now().atZone(ZoneId.systemDefault()))
+            Log.d(
+                "HealthPlugin",
+                "Sensor step data received: ${sensorStepData.size} records. Updating query and storing data."
+            )
+
+            StepCounterService.box.boxFor(SensorStep::class.java).put(sensorStepData)
+        } else {
+            Log.d(
+                "HealthPlugin",
+                "No sensor step data found. Extending query duration."
+            )
+        }
+    }
+
     private fun getTotalStepsInInterval(call: MethodCall, result: Result) {
         val start = call.argument<Long>("startTime")!!
         val end = call.argument<Long>("endTime")!!
 
+        if (stepSensorActive) {
+
+            if (!StepCounterService.initiated()) {
+                StepCounterService.box = MyObjectBox.builder()
+                    .androidContext(context)
+                    .build();
+            }
+
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    fetchCacheData(10)
+                } catch (e: Exception) {
+                    // ignore
+                }
+                withContext(Dispatchers.Main) {
+                    getSensorDataCount(call, result)
+                }
+            }
+            return
+        }
 
         if (StepCounterService.initiated()) {
             getSensorDataCount(call, result)
@@ -2503,26 +2601,11 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND
                 ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
         ) {
-            scope.launch {
-                val grantedPermissions =
-                    healthConnectClient.permissionController.getGrantedPermissions()
-                if (PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in grantedPermissions) {
-                    val requestPermissionActivityContract =
-                        PermissionController.createRequestPermissionResultContract()
-
-                    val healthConnectRequestPermissionsLauncher =
-                        (activity as ComponentActivity).registerForActivityResult(
-                            requestPermissionActivityContract
-                        ) { granted -> result.success(true) }
-
-                    healthConnectRequestPermissionsLauncher.launch(
-                        setOf(PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
-                    )
-                } else {
-                    result.success(true)
-                }
-            }
-
+            mResult = result
+            healthConnectRequestPermissionsLauncher!!.launch(
+                setOf(PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+            )
+            return
         }
 
         result.success(false)
@@ -2540,7 +2623,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     }
 
     private fun isStepSensorRunning(call: MethodCall, result: Result) {
-        result.success(isForegroundServiceRunning(context!!, StepCounterService::class.java))
+        result.success(
+            isForegroundServiceRunning(
+                context!!,
+                StepCounterService::class.java
+            ) || stepSensorActive
+        )
     }
 
     private fun clearStepSensorData(call: MethodCall, result: Result) {
@@ -2566,27 +2654,44 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     }
 
     private fun startStepSensorBackgroundService(call: MethodCall, result: Result) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (ContextCompat.checkSelfPermission(
-                    activity!!,
-                    Manifest.permission.ACTIVITY_RECOGNITION
-                )
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                mResult = result
-                activityRecognitionPermissionLauncher!!.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
-                return
-            }
+        if (ContextCompat.checkSelfPermission(
+                activity!!,
+                Manifest.permission.ACTIVITY_RECOGNITION
+            )
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            mResult = result
+            activityRecognitionPermissionLauncher!!.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
+            return
+        } else {
+            startStepSenor()
+            result.success(true)
         }
-
-        startStepSenor()
-        result.success(true)
     }
 
+    @SuppressLint("MissingPermission")
     private fun startStepSenor() {
         try {
-            val serviceIntent = Intent(activity!!, StepCounterService::class.java)
-            ContextCompat.startForegroundService(context!!, serviceIntent)
+            val hasMinPlayServices = GoogleApiAvailability.getInstance()
+                .isGooglePlayServicesAvailable(
+                    context!!,
+                    LocalRecordingClient.LOCAL_RECORDING_CLIENT_MIN_VERSION_CODE
+                )
+            if (hasMinPlayServices == ConnectionResult.SUCCESS) {
+                val localRecordingClient = FitnessLocal.getLocalRecordingClient(activity!!)
+                localRecordingClient.subscribe(LocalDataType.TYPE_STEP_COUNT_DELTA)
+                    .addOnSuccessListener {
+                        stepSensorActive = true
+                        Log.d("HealthPlugin", "FitnessLocal subscribed");
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("HealthPlugin", "FitnessLocal subscription failed: $e");
+                    }
+
+            } else {
+                val serviceIntent = Intent(activity!!, StepCounterService::class.java)
+                ContextCompat.startForegroundService(context!!, serviceIntent)
+            }
         } catch (e: Exception) {
             Log.d("HealthPlugin", e.toString());
         }

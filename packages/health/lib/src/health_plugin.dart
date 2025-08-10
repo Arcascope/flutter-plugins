@@ -140,6 +140,15 @@ class Health {
     }
   }
 
+  Future<void> requestBackgroundFetchIfAvailable() async {
+    try {
+      await _channel.invokeMethod('requestBackgroundFetchIfAvailable');
+      return;
+    } catch (e) {
+      debugPrint('$runtimeType - Exception in revokePermissions(): $e');
+    }
+  }
+
   /// Returns the current status of Health Connect availability.
   ///
   /// See this for more info:
