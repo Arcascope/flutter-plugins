@@ -498,6 +498,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         channel?.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
         threadPoolExecutor = Executors.newFixedThreadPool(4)
+
+        if (!StepCounterService.initiated()) {
+            StepCounterService.box = MyObjectBox.builder()
+                .androidContext(context)
+                .build();
+        }
+
         checkAvailability()
         if (healthConnectAvailable) {
             healthConnectClient =
@@ -1489,6 +1496,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         val endTime = Instant.ofEpochMilli(call.argument<Long>("endTime")!!)
 
         val healthConnectData = mutableListOf<Map<String, Any?>>()
+
+        if (!StepCounterService.initiated()) {
+            StepCounterService.box = MyObjectBox.builder()
+                .androidContext(this)
+                .build();
+        }
 
         if (dataType == STEPS) {
             val items = StepCounterService.box.boxFor(SensorStep::class.java).query(
