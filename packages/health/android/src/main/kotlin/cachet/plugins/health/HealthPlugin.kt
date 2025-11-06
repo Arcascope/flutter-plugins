@@ -1335,7 +1335,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             return
         }
 
-        if (StepCounterService.initiated()) {
+        if (StepCounterService.initiated() && stepSensorActive) {
             getSensorData(call, result)
             return
         }
@@ -2675,6 +2675,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
     @SuppressLint("MissingPermission")
     private fun startStepSenor() {
         try {
+            stepSensorActive = true
             val hasMinPlayServices = GoogleApiAvailability.getInstance()
                 .isGooglePlayServicesAvailable(
                     context!!,
@@ -2688,6 +2689,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         Log.d("HealthPlugin", "FitnessLocal subscribed");
                     }
                     .addOnFailureListener { e ->
+                        stepSensorActive = false
                         Log.e("HealthPlugin", "FitnessLocal subscription failed: $e");
                     }
 
