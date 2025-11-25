@@ -185,6 +185,10 @@ class Health {
     }
   }
 
+  Future<bool?> backgroundFetchPermissionGranted() async {
+    return await _channel.invokeMethod('backgroundFetchPermissionGranted');
+  }
+
   /// Disconnect from Google fit.
   ///
   /// Not supported on iOS and Google Health Connect, and the method does nothing.
