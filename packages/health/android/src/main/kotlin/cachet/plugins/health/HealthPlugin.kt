@@ -1510,6 +1510,8 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     endTime.toEpochMilli()
                 )
             ).build().find()
+
+
             healthConnectData.addAll(items.map {
                 mapOf<String, Any>(
                     "value" to
@@ -2576,6 +2578,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             "requestAuthorization" -> requestAuthorization(call, result)
             "revokePermissions" -> revokePermissions(call, result)
             "requestBackgroundFetchIfAvailable" -> requestBackgroundFetchIfAvailable(call, result)
+            "backgroundFetchPermissionGranted" -> backgroundFetchPermissionGranted(call, result)
             "getData" -> getData(call, result)
             "getIntervalData" -> getIntervalData(call, result)
             "writeData" -> writeData(call, result)
@@ -2608,6 +2611,27 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             healthConnectRequestPermissionsLauncher!!.launch(
                 setOf(PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
             )
+            return
+        }
+
+        result.success(false)
+    }
+
+    @OptIn(ExperimentalFeatureAvailabilityApi::class)
+    private fun backgroundFetchPermissionGranted(call: MethodCall, result: Result) {
+        if (healthConnectClient
+                .features
+                .getFeatureStatus(
+                    HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND
+                ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+        ) {
+
+            scope.launch {
+                val grantedPermissions =
+                    healthConnectClient.permissionController.getGrantedPermissions()
+
+                result.success(PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in grantedPermissions)
+            }
             return
         }
 
