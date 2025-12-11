@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
+import androidx.health.connect.client.records.metadata.Metadata
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -22,7 +23,6 @@ import androidx.core.content.ContextCompat
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.PermissionController
-import androidx.health.connect.client.feature.ExperimentalFeatureAvailabilityApi
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
 import androidx.health.connect.client.records.*
@@ -821,10 +821,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         startZoneOffset = null,
                         endTime = endTime,
                         endZoneOffset = null,
-                        mealType =
-                        MapMealTypeToTypeHC[
-                            mealType]
-                            ?: MEAL_TYPE_UNKNOWN,
+                        metadata = Metadata.manualEntry()
                     ),
                 )
                 healthConnectClient.insertRecords(
@@ -1432,7 +1429,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 // If fine location is enabled, read distance data
                 if (ContextCompat.checkSelfPermission(
                         context!!.applicationContext,
-                        android.Manifest.permission
+                        Manifest.permission
                             .ACCESS_FINE_LOCATION,
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
@@ -2599,7 +2596,6 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         }
     }
 
-    @OptIn(ExperimentalFeatureAvailabilityApi::class)
     private fun requestBackgroundFetchIfAvailable(call: MethodCall, result: Result) {
         if (healthConnectClient
                 .features
@@ -2617,7 +2613,6 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         result.success(false)
     }
 
-    @OptIn(ExperimentalFeatureAvailabilityApi::class)
     private fun backgroundFetchPermissionGranted(call: MethodCall, result: Result) {
         if (healthConnectClient
                 .features
@@ -2907,7 +2902,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 result.success(false)
                 return
             }
-            val access = permissions[i]!!
+            val access = permissions[i]
             val dataType = MapToHCType[typeKey]!!
             if (access == 0) {
                 permList.add(
@@ -3713,6 +3708,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 HEIGHT ->
@@ -3726,6 +3722,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 WEIGHT ->
@@ -3739,6 +3736,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 STEPS ->
@@ -3754,6 +3752,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         count = value.toLong(),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 ACTIVE_ENERGY_BURNED ->
@@ -3772,6 +3771,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 HEART_RATE ->
@@ -3798,6 +3798,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 BODY_TEMPERATURE ->
@@ -3811,6 +3812,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 BODY_WATER_MASS ->
@@ -3824,6 +3826,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 BLOOD_OXYGEN ->
@@ -3837,6 +3840,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 BLOOD_GLUCOSE ->
@@ -3850,6 +3854,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 DISTANCE_DELTA ->
@@ -3868,6 +3873,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 WATER ->
@@ -3886,6 +3892,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_ASLEEP ->
@@ -3914,62 +3921,65 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                         .STAGE_TYPE_SLEEPING
                                 )
                         ),
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_LIGHT ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         stages =
-                        listOf(
-                            SleepSessionRecord
-                                .Stage(
-                                    Instant.ofEpochMilli(
-                                        startTime
-                                    ),
-                                    Instant.ofEpochMilli(
-                                        endTime
-                                    ),
-                                    SleepSessionRecord
-                                        .STAGE_TYPE_LIGHT
-                                )
-                        ),
+                            listOf(
+                                SleepSessionRecord
+                                    .Stage(
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                        Instant.ofEpochMilli(
+                                            endTime
+                                        ),
+                                        SleepSessionRecord
+                                            .STAGE_TYPE_LIGHT
+                                    )
+                            ),
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_DEEP ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         stages =
-                        listOf(
-                            SleepSessionRecord
-                                .Stage(
-                                    Instant.ofEpochMilli(
-                                        startTime
-                                    ),
-                                    Instant.ofEpochMilli(
-                                        endTime
-                                    ),
-                                    SleepSessionRecord
-                                        .STAGE_TYPE_DEEP
-                                )
-                        ),
+                            listOf(
+                                SleepSessionRecord
+                                    .Stage(
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                        Instant.ofEpochMilli(
+                                            endTime
+                                        ),
+                                        SleepSessionRecord
+                                            .STAGE_TYPE_DEEP
+                                    )
+                            ),
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_REM ->
@@ -3998,6 +4008,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                         .STAGE_TYPE_REM
                                 )
                         ),
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_OUT_OF_BED ->
@@ -4026,6 +4037,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                         .STAGE_TYPE_OUT_OF_BED
                                 )
                         ),
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_AWAKE ->
@@ -4054,6 +4066,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                         .STAGE_TYPE_AWAKE
                                 )
                         ),
+                        metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_SESSION ->
@@ -4068,6 +4081,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 RESTING_HEART_RATE ->
@@ -4079,6 +4093,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         beatsPerMinute =
                         value.toLong(),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 BASAL_ENERGY_BURNED ->
@@ -4092,6 +4107,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             value
                         ),
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 FLIGHTS_CLIMBED ->
@@ -4107,6 +4123,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         floors = value,
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 RESPIRATORY_RATE ->
@@ -4117,6 +4134,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         rate = value,
                         zoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
                 // AGGREGATE_STEP_COUNT -> StepsRecord()
                 TOTAL_CALORIES_BURNED ->
@@ -4135,6 +4153,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                         startZoneOffset = null,
                         endZoneOffset = null,
+                        metadata = Metadata.manualEntry()
                     )
 
                 BLOOD_PRESSURE_SYSTOLIC ->
@@ -4200,6 +4219,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         endZoneOffset = null,
                         exerciseType = workoutType,
                         title = title,
+                        metadata = Metadata.manualEntry()
                     ),
                 )
                 if (totalDistance != null) {
@@ -4213,6 +4233,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             Length.meters(
                                 totalDistance.toDouble()
                             ),
+                            metadata = Metadata.manualEntry()
                         ),
                     )
                 }
@@ -4228,6 +4249,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                 totalEnergyBurned
                                     .toDouble()
                             ),
+                            metadata = Metadata.manualEntry()
                         ),
                     )
                 }
@@ -4272,6 +4294,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                 diastolic
                             ),
                             zoneOffset = null,
+                            metadata = Metadata.manualEntry()
                         ),
                     ),
                 )
