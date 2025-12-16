@@ -2981,70 +2981,37 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
                 // Set up the initial request to read health records with specified
                 // parameters
-                var request =
-                    ReadRecordsRequest(
+                var pageToken: String? = null
+                var pageNumber = 0
+
+                do {
+                    pageNumber += 1
+
+                    val request = ReadRecordsRequest(
                         pageSize = 100,
                         recordType = classType,
-                        // Define the maximum amount of data
-                        // that HealthConnect can return
-                        // in a single request
-                        timeRangeFilter =
-                        TimeRangeFilter.between(
-                            startTime,
-                            endTime
-                        ),
+                        timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
+                        pageToken = pageToken
                     )
 
-                var response : ReadRecordsResponse<out Record>?
-
-
-
-                try {
-                    response = healthConnectClient.readRecords(request)
-                } catch (e: Exception) {
-                    Log.i("Health Plugin", "Exception: $e happen in first page request")
-                    throw RuntimeException("Exception: $e happen in first page request")
-                }
-
-                var pageToken:String? = null
-
-                if (response != null) {
-
-                    pageToken = response?.pageToken
-
-                    // Add the records from the initial response to the records list
-                    records.addAll(response?.records.orEmpty())
-                }
-
-                // Continue making requests and fetching records while there is a
-                // page token
-                var pagenu = 0;
-                while (!pageToken.isNullOrEmpty()) {
-                    pagenu = pagenu + 1
-                    request =
-                        ReadRecordsRequest(
-                            pageSize = 100,
-                            recordType = classType,
-                            timeRangeFilter =
-                            TimeRangeFilter.between(
-                                startTime,
-                                endTime
-                            ),
-                            pageToken = pageToken
-                        )
-
                     try {
-                        response = healthConnectClient.readRecords(request)
-                    } catch (e: Exception) {
-                        Log.i("Health Plugin", "Exception: $e happen in $pagenu page request")
-                        throw RuntimeException("Exception: $e happen in $pagenu page request")
-                    }
-                    if(response != null) {
-                        pageToken = response?.pageToken
-                        records.addAll(response.records)
-                    }
-                }
+                        val response = healthConnectClient.readRecords(request)
 
+                        // Add the records from the response
+                        records.addAll(response.records)
+
+                        // Update pageToken for next iteration
+                        pageToken = response.pageToken
+
+                    } catch (e: Exception) {
+                        Log.w("Health Plugin", "Exception on page $pageNumber: $e. Skipping this page.")
+                        // Skip this page and continue with next token if available
+                        // HealthConnect does not provide "next token" on failed request,
+                        // so you may need to stop here or implement retry logic.
+                        break // or continue depending on your retry strategy
+                    }
+
+                } while (!pageToken.isNullOrEmpty())
                 // Workout needs distance and total calories burned too
                 if (dataType == WORKOUT) {
                     for (rec in records) {
