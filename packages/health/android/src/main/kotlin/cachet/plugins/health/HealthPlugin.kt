@@ -2479,14 +2479,14 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     healthConnectClient.aggregate(
                         AggregateRequest(
                             metrics =
-                            setOf(
-                                StepsRecord.COUNT_TOTAL
-                            ),
+                                setOf(
+                                    StepsRecord.COUNT_TOTAL
+                                ),
                             timeRangeFilter =
-                            TimeRangeFilter.between(
-                                startInstant,
-                                endInstant
-                            ),
+                                TimeRangeFilter.between(
+                                    startInstant,
+                                    endInstant
+                                ),
                         ),
                     )
                 // The result may be null if no data is available in the
@@ -2989,14 +2989,14 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         // that HealthConnect can return
                         // in a single request
                         timeRangeFilter =
-                        TimeRangeFilter.between(
-                            startTime,
-                            endTime
-                        ),
+                            TimeRangeFilter.between(
+                                startTime,
+                                endTime
+                            ),
                     )
 
-                var response : ReadRecordsResponse<out Record>? = null
-                
+                var response: ReadRecordsResponse<out Record>? = null
+
                 try {
                     response = healthConnectClient.readRecords(request)
                 } catch (e: Exception) {
@@ -3004,23 +3004,23 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
                 }
 
-                var pageToken:String? = null
+                var pageToken: String? = null
 
                 if (response != null) {
                     pageToken = response.pageToken
                     records.addAll(response.records.orEmpty())
                 }
-                
+
                 while (!pageToken.isNullOrEmpty()) {
                     request =
                         ReadRecordsRequest(
                             pageSize = 100,
                             recordType = classType,
                             timeRangeFilter =
-                            TimeRangeFilter.between(
-                                startTime,
-                                endTime
-                            ),
+                                TimeRangeFilter.between(
+                                    startTime,
+                                    endTime
+                                ),
                             pageToken = pageToken
                         )
 
@@ -3029,7 +3029,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     } catch (e: Exception) {
                         Log.i("Health Plugin", "Exception: $e happen in page request")
                     }
-                    if(response != null) {
+                    if (response != null) {
                         pageToken = response.pageToken
                         records.addAll(response.records)
                     }
@@ -3043,12 +3043,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             healthConnectClient.readRecords(
                                 ReadRecordsRequest(
                                     recordType =
-                                    DistanceRecord::class,
+                                        DistanceRecord::class,
                                     timeRangeFilter =
-                                    TimeRangeFilter.between(
-                                        record.startTime,
-                                        record.endTime,
-                                    ),
+                                        TimeRangeFilter.between(
+                                            record.startTime,
+                                            record.endTime,
+                                        ),
                                 ),
                             )
                         var totalDistance = 0.0
@@ -3062,12 +3062,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             healthConnectClient.readRecords(
                                 ReadRecordsRequest(
                                     recordType =
-                                    TotalCaloriesBurnedRecord::class,
+                                        TotalCaloriesBurnedRecord::class,
                                     timeRangeFilter =
-                                    TimeRangeFilter.between(
-                                        record.startTime,
-                                        record.endTime,
-                                    ),
+                                        TimeRangeFilter.between(
+                                            record.startTime,
+                                            record.endTime,
+                                        ),
                                 ),
                             )
                         var totalEnergyBurned = 0.0
@@ -3082,12 +3082,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             healthConnectClient.readRecords(
                                 ReadRecordsRequest(
                                     recordType =
-                                    StepsRecord::class,
+                                        StepsRecord::class,
                                     timeRangeFilter =
-                                    TimeRangeFilter.between(
-                                        record.startTime,
-                                        record.endTime
-                                    ),
+                                        TimeRangeFilter.between(
+                                            record.startTime,
+                                            record.endTime
+                                        ),
                                 ),
                             )
                         var totalSteps = 0.0
@@ -3152,30 +3152,32 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     }
                     // Filter sleep stages for requested stage
                 } else if (classType == SleepSessionRecord::class) {
-                    for (rec in response.records) {
-                        if (rec is SleepSessionRecord) {
-                            if (dataType == SLEEP_SESSION) {
-                                healthConnectData.addAll(
-                                    convertRecord(
-                                        rec,
-                                        dataType
+                    if (response != null) {
+                        for (rec in response.records) {
+                            if (rec is SleepSessionRecord) {
+                                if (dataType == SLEEP_SESSION) {
+                                    healthConnectData.addAll(
+                                        convertRecord(
+                                            rec,
+                                            dataType
+                                        )
                                     )
-                                )
-                            } else {
-                                for (recStage in rec.stages) {
-                                    if (dataType ==
-                                        MapSleepStageToType[
-                                            recStage.stage]
-                                    ) {
-                                        healthConnectData
-                                            .addAll(
-                                                convertRecordStage(
-                                                    recStage,
-                                                    dataType,
-                                                    rec.metadata.dataOrigin
-                                                        .packageName
+                                } else {
+                                    for (recStage in rec.stages) {
+                                        if (dataType ==
+                                            MapSleepStageToType[
+                                                recStage.stage]
+                                        ) {
+                                            healthConnectData
+                                                .addAll(
+                                                    convertRecordStage(
+                                                        recStage,
+                                                        dataType,
+                                                        rec.metadata.dataOrigin
+                                                            .packageName
+                                                    )
                                                 )
-                                            )
+                                        }
                                     }
                                 }
                             }
@@ -3227,14 +3229,14 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     AggregateGroupByDurationRequest(
                         metrics = setOf(metricClassType),
                         timeRangeFilter =
-                        TimeRangeFilter.between(
-                            startTime,
-                            endTime
-                        ),
+                            TimeRangeFilter.between(
+                                startTime,
+                                endTime
+                            ),
                         timeRangeSlicer =
-                        Duration.ofSeconds(
-                            interval
-                        )
+                            Duration.ofSeconds(
+                                interval
+                            )
                     )
                 val response = healthConnectClient.aggregateGroupByDuration(request)
 
@@ -3717,13 +3719,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 BODY_FAT_PERCENTAGE ->
                     BodyFatRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         percentage =
-                        Percentage(
-                            value
-                        ),
+                            Percentage(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3731,13 +3733,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 HEIGHT ->
                     HeightRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         height =
-                        Length.meters(
-                            value
-                        ),
+                            Length.meters(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3745,13 +3747,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 WEIGHT ->
                     WeightRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         weight =
-                        Mass.kilograms(
-                            value
-                        ),
+                            Mass.kilograms(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3759,13 +3761,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 STEPS ->
                     StepsRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         count = value.toLong(),
                         startZoneOffset = null,
                         endZoneOffset = null,
@@ -3775,17 +3777,17 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 ACTIVE_ENERGY_BURNED ->
                     ActiveCaloriesBurnedRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         energy =
-                        Energy.kilocalories(
-                            value
-                        ),
+                            Energy.kilocalories(
+                                value
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -3794,25 +3796,25 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 HEART_RATE ->
                     HeartRateRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
-                        endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
-                        samples =
-                        listOf<
-                                HeartRateRecord.Sample>(
-                            HeartRateRecord.Sample(
-                                time =
-                                Instant.ofEpochMilli(
-                                    startTime
-                                ),
-                                beatsPerMinute =
-                                value.toLong(),
+                            Instant.ofEpochMilli(
+                                startTime
                             ),
-                        ),
+                        endTime =
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
+                        samples =
+                            listOf<
+                                    HeartRateRecord.Sample>(
+                                HeartRateRecord.Sample(
+                                    time =
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                    beatsPerMinute =
+                                        value.toLong(),
+                                ),
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -3821,13 +3823,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 BODY_TEMPERATURE ->
                     BodyTemperatureRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         temperature =
-                        Temperature.celsius(
-                            value
-                        ),
+                            Temperature.celsius(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3835,13 +3837,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 BODY_WATER_MASS ->
                     BodyWaterMassRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         mass =
-                        Mass.kilograms(
-                            value
-                        ),
+                            Mass.kilograms(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3849,13 +3851,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 BLOOD_OXYGEN ->
                     OxygenSaturationRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         percentage =
-                        Percentage(
-                            value
-                        ),
+                            Percentage(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3863,13 +3865,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 BLOOD_GLUCOSE ->
                     BloodGlucoseRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         level =
-                        BloodGlucose.milligramsPerDeciliter(
-                            value
-                        ),
+                            BloodGlucose.milligramsPerDeciliter(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -3877,17 +3879,17 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 DISTANCE_DELTA ->
                     DistanceRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         distance =
-                        Length.meters(
-                            value
-                        ),
+                            Length.meters(
+                                value
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -3896,17 +3898,17 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 WATER ->
                     HydrationRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         volume =
-                        Volume.liters(
-                            value
-                        ),
+                            Volume.liters(
+                                value
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -3915,29 +3917,29 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 SLEEP_ASLEEP ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         stages =
-                        listOf(
-                            SleepSessionRecord
-                                .Stage(
-                                    Instant.ofEpochMilli(
-                                        startTime
-                                    ),
-                                    Instant.ofEpochMilli(
-                                        endTime
-                                    ),
-                                    SleepSessionRecord
-                                        .STAGE_TYPE_SLEEPING
-                                )
-                        ),
+                            listOf(
+                                SleepSessionRecord
+                                    .Stage(
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                        Instant.ofEpochMilli(
+                                            endTime
+                                        ),
+                                        SleepSessionRecord
+                                            .STAGE_TYPE_SLEEPING
+                                    )
+                            ),
                         metadata = Metadata.manualEntry()
                     )
 
@@ -4002,100 +4004,100 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 SLEEP_REM ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         stages =
-                        listOf(
-                            SleepSessionRecord
-                                .Stage(
-                                    Instant.ofEpochMilli(
-                                        startTime
-                                    ),
-                                    Instant.ofEpochMilli(
-                                        endTime
-                                    ),
-                                    SleepSessionRecord
-                                        .STAGE_TYPE_REM
-                                )
-                        ),
+                            listOf(
+                                SleepSessionRecord
+                                    .Stage(
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                        Instant.ofEpochMilli(
+                                            endTime
+                                        ),
+                                        SleepSessionRecord
+                                            .STAGE_TYPE_REM
+                                    )
+                            ),
                         metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_OUT_OF_BED ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         stages =
-                        listOf(
-                            SleepSessionRecord
-                                .Stage(
-                                    Instant.ofEpochMilli(
-                                        startTime
-                                    ),
-                                    Instant.ofEpochMilli(
-                                        endTime
-                                    ),
-                                    SleepSessionRecord
-                                        .STAGE_TYPE_OUT_OF_BED
-                                )
-                        ),
+                            listOf(
+                                SleepSessionRecord
+                                    .Stage(
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                        Instant.ofEpochMilli(
+                                            endTime
+                                        ),
+                                        SleepSessionRecord
+                                            .STAGE_TYPE_OUT_OF_BED
+                                    )
+                            ),
                         metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_AWAKE ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         stages =
-                        listOf(
-                            SleepSessionRecord
-                                .Stage(
-                                    Instant.ofEpochMilli(
-                                        startTime
-                                    ),
-                                    Instant.ofEpochMilli(
-                                        endTime
-                                    ),
-                                    SleepSessionRecord
-                                        .STAGE_TYPE_AWAKE
-                                )
-                        ),
+                            listOf(
+                                SleepSessionRecord
+                                    .Stage(
+                                        Instant.ofEpochMilli(
+                                            startTime
+                                        ),
+                                        Instant.ofEpochMilli(
+                                            endTime
+                                        ),
+                                        SleepSessionRecord
+                                            .STAGE_TYPE_AWAKE
+                                    )
+                            ),
                         metadata = Metadata.manualEntry()
                     )
 
                 SLEEP_SESSION ->
                     SleepSessionRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -4104,11 +4106,11 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 RESTING_HEART_RATE ->
                     RestingHeartRateRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         beatsPerMinute =
-                        value.toLong(),
+                            value.toLong(),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -4116,13 +4118,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 BASAL_ENERGY_BURNED ->
                     BasalMetabolicRateRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         basalMetabolicRate =
-                        Power.kilocaloriesPerDay(
-                            value
-                        ),
+                            Power.kilocaloriesPerDay(
+                                value
+                            ),
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
                     )
@@ -4130,13 +4132,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 FLIGHTS_CLIMBED ->
                     FloorsClimbedRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         floors = value,
                         startZoneOffset = null,
                         endZoneOffset = null,
@@ -4146,9 +4148,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 RESPIRATORY_RATE ->
                     RespiratoryRateRecord(
                         time =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         rate = value,
                         zoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -4157,17 +4159,17 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 TOTAL_CALORIES_BURNED ->
                     TotalCaloriesBurnedRecord(
                         startTime =
-                        Instant.ofEpochMilli(
-                            startTime
-                        ),
+                            Instant.ofEpochMilli(
+                                startTime
+                            ),
                         endTime =
-                        Instant.ofEpochMilli(
-                            endTime
-                        ),
+                            Instant.ofEpochMilli(
+                                endTime
+                            ),
                         energy =
-                        Energy.kilocalories(
-                            value
-                        ),
+                            Energy.kilocalories(
+                                value
+                            ),
                         startZoneOffset = null,
                         endZoneOffset = null,
                         metadata = Metadata.manualEntry()
@@ -4247,9 +4249,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             endTime = endTime,
                             endZoneOffset = null,
                             distance =
-                            Length.meters(
-                                totalDistance.toDouble()
-                            ),
+                                Length.meters(
+                                    totalDistance.toDouble()
+                                ),
                             metadata = Metadata.manualEntry()
                         ),
                     )
@@ -4262,10 +4264,10 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             endTime = endTime,
                             endZoneOffset = null,
                             energy =
-                            Energy.kilocalories(
-                                totalEnergyBurned
-                                    .toDouble()
-                            ),
+                                Energy.kilocalories(
+                                    totalEnergyBurned
+                                        .toDouble()
+                                ),
                             metadata = Metadata.manualEntry()
                         ),
                     )
@@ -4303,13 +4305,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         BloodPressureRecord(
                             time = startTime,
                             systolic =
-                            Pressure.millimetersOfMercury(
-                                systolic
-                            ),
+                                Pressure.millimetersOfMercury(
+                                    systolic
+                                ),
                             diastolic =
-                            Pressure.millimetersOfMercury(
-                                diastolic
-                            ),
+                                Pressure.millimetersOfMercury(
+                                    diastolic
+                                ),
                             zoneOffset = null,
                             metadata = Metadata.manualEntry()
                         ),
@@ -4348,10 +4350,10 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 healthConnectClient.deleteRecords(
                     recordType = classType,
                     timeRangeFilter =
-                    TimeRangeFilter.between(
-                        startTime,
-                        endTime
-                    ),
+                        TimeRangeFilter.between(
+                            startTime,
+                            endTime
+                        ),
                 )
                 result.success(true)
             } catch (e: Exception) {
