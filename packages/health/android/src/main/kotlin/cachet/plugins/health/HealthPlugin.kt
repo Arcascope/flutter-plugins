@@ -34,6 +34,7 @@ import androidx.health.connect.client.records.MealType.MEAL_TYPE_UNKNOWN
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.response.ReadRecordsResponse
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -2982,6 +2983,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 // parameters
                 var request =
                     ReadRecordsRequest(
+                        pageSize = 100,
                         recordType = classType,
                         // Define the maximum amount of data
                         // that HealthConnect can return
@@ -2993,17 +2995,35 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                     )
 
-                var response = healthConnectClient.readRecords(request)
-                var pageToken = response.pageToken
+                var response : ReadRecordsResponse<out Record>?
 
-                // Add the records from the initial response to the records list
-                records.addAll(response.records)
+
+
+                try {
+                    response = healthConnectClient.readRecords(request)
+                } catch (e: Exception) {
+                    Log.i("Health Plugin", "Exception: $e happen in first page request")
+                    throw RuntimeException("Exception: $e happen in first page request")
+                }
+
+                var pageToken:String? = null
+
+                if (response != null) {
+
+                    pageToken = response?.pageToken
+
+                    // Add the records from the initial response to the records list
+                    records.addAll(response?.records.orEmpty())
+                }
 
                 // Continue making requests and fetching records while there is a
                 // page token
+                var pagenu = 0;
                 while (!pageToken.isNullOrEmpty()) {
+                    pagenu = pagenu + 1
                     request =
                         ReadRecordsRequest(
+                            pageSize = 100,
                             recordType = classType,
                             timeRangeFilter =
                             TimeRangeFilter.between(
@@ -3012,10 +3032,17 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             ),
                             pageToken = pageToken
                         )
-                    response = healthConnectClient.readRecords(request)
 
-                    pageToken = response.pageToken
-                    records.addAll(response.records)
+                    try {
+                        response = healthConnectClient.readRecords(request)
+                    } catch (e: Exception) {
+                        Log.i("Health Plugin", "Exception: $e happen in $pagenu page request")
+                        throw RuntimeException("Exception: $e happen in $pagenu page request")
+                    }
+                    if(response != null) {
+                        pageToken = response?.pageToken
+                        records.addAll(response.records)
+                    }
                 }
 
                 // Workout needs distance and total calories burned too
