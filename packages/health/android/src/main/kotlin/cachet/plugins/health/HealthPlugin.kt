@@ -2981,37 +2981,60 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
                 // Set up the initial request to read health records with specified
                 // parameters
-                var pageToken: String? = null
-                var pageNumber = 0
-
-                do {
-                    pageNumber += 1
-
-                    val request = ReadRecordsRequest(
+                var request =
+                    ReadRecordsRequest(
                         pageSize = 100,
                         recordType = classType,
-                        timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
-                        pageToken = pageToken
+                        // Define the maximum amount of data
+                        // that HealthConnect can return
+                        // in a single request
+                        timeRangeFilter =
+                        TimeRangeFilter.between(
+                            startTime,
+                            endTime
+                        ),
                     )
 
+                var response : ReadRecordsResponse<out Record>? = null
+                
+                try {
+                    response = healthConnectClient.readRecords(request)
+                } catch (e: Exception) {
+                    Log.i("Health Plugin", "Exception: $e happen in first page request")
+
+                }
+
+                var pageToken:String? = null
+
+                if (response != null) {
+                    pageToken = response.pageToken
+                    records.addAll(response.records.orEmpty())
+                }
+                
+                while (!pageToken.isNullOrEmpty()) {
+                    request =
+                        ReadRecordsRequest(
+                            pageSize = 100,
+                            recordType = classType,
+                            timeRangeFilter =
+                            TimeRangeFilter.between(
+                                startTime,
+                                endTime
+                            ),
+                            pageToken = pageToken
+                        )
+
                     try {
-                        val response = healthConnectClient.readRecords(request)
-
-                        // Add the records from the response
-                        records.addAll(response.records)
-
-                        // Update pageToken for next iteration
-                        pageToken = response.pageToken
-
+                        response = healthConnectClient.readRecords(request)
                     } catch (e: Exception) {
-                        Log.w("Health Plugin", "Exception on page $pageNumber: $e. Skipping this page.")
-                        // Skip this page and continue with next token if available
-                        // HealthConnect does not provide "next token" on failed request,
-                        // so you may need to stop here or implement retry logic.
-                        break // or continue depending on your retry strategy
+                        Log.i("Health Plugin", "Exception: $e happen in page request")
                     }
+                    if(response != null) {
+                        pageToken = response.pageToken
+                        records.addAll(response.records)
+                    }
+                }
 
-                } while (!pageToken.isNullOrEmpty())
                 // Workout needs distance and total calories burned too
                 if (dataType == WORKOUT) {
                     for (rec in records) {
