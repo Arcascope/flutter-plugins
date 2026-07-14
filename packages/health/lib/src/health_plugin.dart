@@ -622,17 +622,23 @@ class Health {
   }
 
   /// Fetch a list of health data points based on [types].
+  ///
+  /// If [samplingInterval] is provided, at most one data point is returned
+  /// per interval, dropping the rest as the data is read. Use this for very
+  /// dense types (e.g. heart rate) where reading every raw sample can exhaust
+  /// memory. Currently only applied on Android (Health Connect).
   Future<List<HealthDataPoint>> getHealthDataFromTypes({
     required List<HealthDataType> types,
     required DateTime startTime,
     required DateTime endTime,
     bool includeManualEntry = true,
+    Duration? samplingInterval,
   }) async {
     List<HealthDataPoint> dataPoints = [];
 
     for (var type in types) {
-      final result =
-          await _prepareQuery(startTime, endTime, type, includeManualEntry);
+      final result = await _prepareQuery(
+          startTime, endTime, type, includeManualEntry, samplingInterval);
       dataPoints.addAll(result);
     }
 
@@ -684,8 +690,9 @@ class Health {
     DateTime startTime,
     DateTime endTime,
     HealthDataType dataType,
-    bool includeManualEntry,
-  ) async {
+    bool includeManualEntry, [
+    Duration? samplingInterval,
+  ]) async {
     // Ask for device ID only once
     _deviceId ??= Platform.isAndroid
         ? (await _deviceInfo.androidInfo).id
@@ -701,7 +708,8 @@ class Health {
     if (dataType == HealthDataType.BODY_MASS_INDEX && Platform.isAndroid) {
       return _computeAndroidBMI(startTime, endTime, includeManualEntry);
     }
-    return await _dataQuery(startTime, endTime, dataType, includeManualEntry);
+    return await _dataQuery(
+        startTime, endTime, dataType, includeManualEntry, samplingInterval);
   }
 
   /// Prepares an interval query, i.e. checks if the types are available, etc.
@@ -750,14 +758,18 @@ class Health {
   }
 
   /// Fetches data points from Android/iOS native code.
-  Future<List<HealthDataPoint>> _dataQuery(DateTime startTime, DateTime endTime,
-      HealthDataType dataType, bool includeManualEntry) async {
+  Future<List<HealthDataPoint>> _dataQuery(
+      DateTime startTime, DateTime endTime, HealthDataType dataType,
+      bool includeManualEntry,
+      [Duration? samplingInterval]) async {
     final args = <String, dynamic>{
       'dataTypeKey': dataType.name,
       'dataUnitKey': dataTypeToUnit[dataType]!.name,
       'startTime': startTime.millisecondsSinceEpoch,
       'endTime': endTime.millisecondsSinceEpoch,
-      'includeManualEntry': includeManualEntry
+      'includeManualEntry': includeManualEntry,
+      if (samplingInterval != null)
+        'samplingIntervalMillis': samplingInterval.inMilliseconds,
     };
     final fetchedDataPoints = await _channel.invokeMethod('getData', args);
 
