@@ -3259,59 +3259,63 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         val endTime = Instant.ofEpochMilli(call.argument<Long>("endTime")!!)
         val healthConnectData = mutableListOf<Map<String, Any?>>()
         scope.launch {
-            MapToHCAggregateMetric[dataType]?.let { metricClassType ->
-                val request =
-                    AggregateGroupByDurationRequest(
-                        metrics = setOf(metricClassType),
-                        timeRangeFilter =
-                        TimeRangeFilter.between(
-                            startTime,
-                            endTime
-                        ),
-                        timeRangeSlicer =
-                        Duration.ofSeconds(
-                            interval
+            try {
+                MapToHCAggregateMetric[dataType]?.let { metricClassType ->
+                    val request =
+                        AggregateGroupByDurationRequest(
+                            metrics = setOf(metricClassType),
+                            timeRangeFilter =
+                            TimeRangeFilter.between(
+                                startTime,
+                                endTime
+                            ),
+                            timeRangeSlicer =
+                            Duration.ofSeconds(
+                                interval
+                            )
                         )
-                    )
-                val response = healthConnectClient.aggregateGroupByDuration(request)
+                    val response = healthConnectClient.aggregateGroupByDuration(request)
 
-                for (durationResult in response) {
-                    // The result may be null if no data is available in the
-                    // time range
-                    var totalValue = durationResult.result[metricClassType]
-                    if (totalValue is Length) {
-                        totalValue = totalValue.inMeters
-                    } else if (totalValue is Energy) {
-                        totalValue = totalValue.inKilocalories
+                    for (durationResult in response) {
+                        // The result is null if no data is available in the
+                        // bucket — skip it rather than fabricating a zero
+                        // value (a 0 BPM heart rate is not a real data point).
+                        var totalValue = durationResult.result[metricClassType]
+                            ?: continue
+                        if (totalValue is Length) {
+                            totalValue = totalValue.inMeters
+                        } else if (totalValue is Energy) {
+                            totalValue = totalValue.inKilocalories
+                        }
+
+                        val packageNames =
+                            durationResult.result.dataOrigins
+                                .joinToString { origin ->
+                                    "${origin.packageName}"
+                                }
+
+                        val data =
+                            mapOf<String, Any>(
+                                "value" to totalValue,
+                                "date_from" to
+                                        durationResult.startTime
+                                            .toEpochMilli(),
+                                "date_to" to
+                                        durationResult.endTime
+                                            .toEpochMilli(),
+                                "source_name" to
+                                        packageNames,
+                                "source_id" to "",
+                                "is_manual_entry" to
+                                        packageNames.contains(
+                                            "user_input"
+                                        )
+                            )
+                        healthConnectData.add(data)
                     }
-
-                    val packageNames =
-                        durationResult.result.dataOrigins
-                            .joinToString { origin ->
-                                "${origin.packageName}"
-                            }
-
-                    val data =
-                        mapOf<String, Any>(
-                            "value" to
-                                    (totalValue
-                                        ?: 0),
-                            "date_from" to
-                                    durationResult.startTime
-                                        .toEpochMilli(),
-                            "date_to" to
-                                    durationResult.endTime
-                                        .toEpochMilli(),
-                            "source_name" to
-                                    packageNames,
-                            "source_id" to "",
-                            "is_manual_entry" to
-                                    packageNames.contains(
-                                        "user_input"
-                                    )
-                        )
-                    healthConnectData.add(data)
                 }
+            } catch (e: Exception) {
+                Log.e("FLUTTER_HEALTH", e.toString())
             }
             Handler(context!!.mainLooper).run { result.success(healthConnectData) }
         }
@@ -4518,7 +4522,11 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             ACTIVE_ENERGY_BURNED to
                     ActiveCaloriesBurnedRecord
                         .ACTIVE_CALORIES_TOTAL,
-            HEART_RATE to HeartRateRecord.MEASUREMENTS_COUNT,
+            // BPM_AVG, not MEASUREMENTS_COUNT: interval queries for heart
+            // rate should return the average BPM per bucket, which lets
+            // callers read dense HR histories without ever materializing the
+            // raw samples (the aggregation runs inside Health Connect).
+            HEART_RATE to HeartRateRecord.BPM_AVG,
             DISTANCE_DELTA to DistanceRecord.DISTANCE_TOTAL,
             WATER to HydrationRecord.VOLUME_TOTAL,
             SLEEP_ASLEEP to SleepSessionRecord.SLEEP_DURATION_TOTAL,
