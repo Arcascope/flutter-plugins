@@ -3277,11 +3277,19 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     val response = healthConnectClient.aggregateGroupByDuration(request)
 
                     for (durationResult in response) {
-                        // The result is null if no data is available in the
-                        // bucket — skip it rather than fabricating a zero
-                        // value (a 0 BPM heart rate is not a real data point).
                         var totalValue = durationResult.result[metricClassType]
-                            ?: continue
+                        if (totalValue == null) {
+                            if (dataType == HEART_RATE) {
+                                // A missing heart-rate bucket means no samples were
+                                // recorded in it — skip it rather than fabricating a
+                                // 0 BPM value, which would not be a real data point.
+                                continue
+                            }
+                            // Every other aggregate type (steps, distance, calories, ...)
+                            // legitimately can be zero for a bucket; report it as such
+                            // rather than dropping the bucket.
+                            totalValue = 0
+                        }
                         if (totalValue is Length) {
                             totalValue = totalValue.inMeters
                         } else if (totalValue is Energy) {
