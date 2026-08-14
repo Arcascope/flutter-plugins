@@ -1315,27 +1315,14 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         }
     }
 
-    /** Get all datapoints of the DataType within the given time range */
+    /** Get all datapoints of the DataType within the given time range.
+     *
+     * The step sensor no longer short-circuits this path: the sensor is a
+     * steps-only fallback, and routing every type through it silently
+     * returned empty lists for sleep, heart rate, etc. Sensor step records
+     * are exposed separately via [getSensorStepData]; callers merge them
+     * with Health Connect steps per time bucket. */
     private fun getData(call: MethodCall, result: Result) {
-
-        if (stepSensorActive) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    fetchCacheData(10)
-                } catch (e: Exception) {
-                    // ignore
-                }
-                withContext(Dispatchers.Main) {
-                    getSensorData(call, result)
-                }
-            }
-            return
-        }
-
-        if (StepCounterService.initiated() && stepSensorActive) {
-            getSensorData(call, result)
-            return
-        }
 
         if (useHealthConnectIfAvailable && healthConnectAvailable) {
             getHCData(call, result)
@@ -1485,6 +1472,27 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     )
             }
         }
+    }
+
+    /** Returns step records collected by the on-device step sensor
+     * (Local Recording API or the foreground StepCounterService), tagged
+     * with source_name "sensor_step". This is the steps-only fallback feed;
+     * callers merge it with Health Connect steps per time bucket. */
+    private fun getSensorStepData(call: MethodCall, result: Result) {
+        if (stepSensorActive) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    fetchCacheData(10)
+                } catch (e: Exception) {
+                    // ignore
+                }
+                withContext(Dispatchers.Main) {
+                    getSensorData(call, result)
+                }
+            }
+            return
+        }
+        getSensorData(call, result)
     }
 
     private fun getSensorData(call: MethodCall, result: Result) {
@@ -2587,6 +2595,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             "writeBloodOxygen" -> writeBloodOxygen(call, result)
             "writeMeal" -> writeMeal(call, result)
             "disconnect" -> disconnect(call, result)
+            "getSensorStepData" -> getSensorStepData(call, result)
             "doseStepSensorIsAvailable" -> doseStepSensorIsAvailable(call, result)
             "isStepSensorRunning" -> isStepSensorRunning(call, result)
             "clearStepSensorData" -> clearStepSensorData(call, result)

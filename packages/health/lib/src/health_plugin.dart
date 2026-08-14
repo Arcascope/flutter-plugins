@@ -818,6 +818,31 @@ class Health {
     return <HealthDataPoint>[];
   }
 
+  /// Fetches step records collected by the on-device step sensor (Android
+  /// only), tagged with source name "sensor_step". The sensor is a
+  /// steps-only fallback to Health Connect; callers are expected to merge
+  /// these with Health Connect steps per time bucket rather than sum them.
+  Future<List<HealthDataPoint>> getSensorStepData({
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    final args = <String, dynamic>{
+      'dataTypeKey': HealthDataType.STEPS.name,
+      'startTime': startTime.millisecondsSinceEpoch,
+      'endTime': endTime.millisecondsSinceEpoch,
+    };
+    final fetchedDataPoints =
+        await _channel.invokeMethod('getSensorStepData', args);
+    if (fetchedDataPoints != null && fetchedDataPoints is List) {
+      final msg = <String, dynamic>{
+        "dataType": HealthDataType.STEPS,
+        "dataPoints": fetchedDataPoints,
+      };
+      return _parse(msg);
+    }
+    return <HealthDataPoint>[];
+  }
+
   Future<bool?> doseStepSensorIsAvailable() async {
     final fetchedDataPoints =
         await _channel.invokeMethod<bool?>('doseStepSensorIsAvailable');
