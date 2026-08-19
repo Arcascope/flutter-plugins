@@ -2724,15 +2724,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             activityRecognitionPermissionLauncher!!.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
             return
         } else {
-            startStepSenor()
-            result.success(true)
+            startStepSensor(result)
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun startStepSenor() {
+    private fun startStepSensor(result: Result) {
         try {
-            stepSensorActive = true
             val hasMinPlayServices = GoogleApiAvailability.getInstance()
                 .isGooglePlayServicesAvailable(
                     context!!,
@@ -2743,19 +2741,25 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 localRecordingClient.subscribe(LocalDataType.TYPE_STEP_COUNT_DELTA)
                     .addOnSuccessListener {
                         stepSensorActive = true
-                        Log.d("HealthPlugin", "FitnessLocal subscribed");
+                        Log.d("HealthPlugin", "FitnessLocal subscribed")
+                        result.success(true)
                     }
                     .addOnFailureListener { e ->
                         stepSensorActive = false
-                        Log.e("HealthPlugin", "FitnessLocal subscription failed: $e");
+                        Log.e("HealthPlugin", "FitnessLocal subscription failed: $e")
+                        result.success(false)
                     }
 
             } else {
                 val serviceIntent = Intent(activity!!, StepCounterService::class.java)
                 ContextCompat.startForegroundService(context!!, serviceIntent)
+                stepSensorActive = true
+                result.success(true)
             }
         } catch (e: Exception) {
-            Log.d("HealthPlugin", e.toString());
+            stepSensorActive = false
+            Log.e("HealthPlugin", "Failed to start step sensor: $e")
+            result.success(false)
         }
     }
 
@@ -2784,8 +2788,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { granted ->
                 if (granted.isNotEmpty() && granted.values.first()) {
-                    startStepSenor()
-                    mResult?.success(true)
+                    mResult?.let { startStepSensor(it) }
                     return@registerForActivityResult
                 }
 
