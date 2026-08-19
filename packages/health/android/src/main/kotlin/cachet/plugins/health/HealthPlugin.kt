@@ -2683,10 +2683,29 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 result.success(false)
                 return
             }
-            val serviceIntent = Intent(activity!!, StepCounterService::class.java)
-            val stopped = activity!!.stopService(serviceIntent)
+            val hasMinPlayServices = GoogleApiAvailability.getInstance()
+                .isGooglePlayServicesAvailable(
+                    context!!,
+                    LocalRecordingClient.LOCAL_RECORDING_CLIENT_MIN_VERSION_CODE
+                )
+            if (hasMinPlayServices == ConnectionResult.SUCCESS) {
+                FitnessLocal.getLocalRecordingClient(activity!!)
+                    .unsubscribe(LocalDataType.TYPE_STEP_COUNT_DELTA)
+                    .addOnSuccessListener {
+                        stepSensorActive = false
+                        result.success(true)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("HealthPlugin", "FitnessLocal unsubscribe failed: $e")
+                        result.success(false)
+                    }
+                return
+            }
 
-            result.success(stopped)
+            val serviceIntent = Intent(activity!!, StepCounterService::class.java)
+            activity!!.stopService(serviceIntent)
+            stepSensorActive = false
+            result.success(true)
         } catch (e: Exception) {
             Log.e("FLUTTER_HEALTH::ERROR", "Failed to stop step sensor service: ${e.message}")
             Log.e("FLUTTER_HEALTH::ERROR", e.stackTrace.toString())
