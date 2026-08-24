@@ -130,4 +130,44 @@ void main() {
       everyElement(10),
     );
   });
+
+  test('large iOS sleep responses filter narrow stage requests', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    const channel = MethodChannel('flutter_health');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'getSleepData');
+      return <Map<String, dynamic>>[
+        for (var index = 0; index <= 100; index++)
+          <String, dynamic>{
+            'uuid': 'sleep-$index',
+            'value': index == 100 ? 4 : 3,
+            'date_from': DateTime.utc(2026, 8, 20)
+                .add(Duration(minutes: index))
+                .millisecondsSinceEpoch,
+            'date_to': DateTime.utc(2026, 8, 20)
+                .add(Duration(minutes: index + 1))
+                .millisecondsSinceEpoch,
+            'source_device_id': 'watch-device',
+            'source_id': 'com.apple.health.test',
+            'source_name': 'Test Apple Watch',
+            'is_manual_entry': false,
+          },
+      ];
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    final points = await Health().getHealthDataFromTypes(
+      types: const <HealthDataType>[HealthDataType.SLEEP_ASLEEP_DEEP],
+      startTime: DateTime.utc(2026, 8, 20),
+      endTime: DateTime.utc(2026, 8, 21),
+    );
+
+    expect(points, hasLength(1));
+    expect(points.single.uuid, 'sleep-100');
+    expect(points.single.type, HealthDataType.SLEEP_ASLEEP_DEEP);
+  });
 }

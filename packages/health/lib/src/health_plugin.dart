@@ -694,16 +694,15 @@ class Health {
     final fetchedDataPoints = await _channel.invokeMethod('getSleepData', args);
     if (fetchedDataPoints is! List) return <HealthDataPoint>[];
 
-    final dataPoints = <HealthDataPoint>[];
-    for (final rawDataPoint in fetchedDataPoints) {
-      final dataPoint = Map<String, dynamic>.from(rawDataPoint as Map);
-      final value = (dataPoint['value'] as num).toInt();
-      final type = _requestedIosSleepType(value, requestedTypes);
-      if (type != null) {
-        dataPoints.add(HealthDataPoint.fromHealthDataPoint(type, dataPoint));
-      }
+    final message = <String, dynamic>{
+      'dataPoints': fetchedDataPoints,
+      'requestedTypes': requestedTypes.toList(),
+    };
+    const threshold = 100;
+    if (fetchedDataPoints.length > threshold) {
+      return compute(_parseIosSleepData, message);
     }
-    return dataPoints;
+    return _parseIosSleepData(message);
   }
 
   static HealthDataType? _requestedIosSleepType(
@@ -731,6 +730,25 @@ class Health {
           HealthDataType.SLEEP_REM,
         _ => null,
       };
+
+  static List<HealthDataPoint> _parseIosSleepData(
+    Map<String, dynamic> message,
+  ) {
+    final dataPoints = message['dataPoints'] as List;
+    final requestedTypes =
+        (message['requestedTypes'] as List).cast<HealthDataType>().toSet();
+
+    final result = <HealthDataPoint>[];
+    for (final rawDataPoint in dataPoints) {
+      final dataPoint = Map<String, dynamic>.from(rawDataPoint as Map);
+      final value = (dataPoint['value'] as num).toInt();
+      final type = _requestedIosSleepType(value, requestedTypes);
+      if (type != null) {
+        result.add(HealthDataPoint.fromHealthDataPoint(type, dataPoint));
+      }
+    }
+    return result;
+  }
 
   /// Fetch a list of health data points based on [types].
   Future<List<HealthDataPoint>> getHealthIntervalDataFromTypes(
