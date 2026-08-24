@@ -152,6 +152,11 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
             getData(call: call, result: result)
         }
 
+        /// Handle a single unfiltered HealthKit sleep-analysis query.
+        else if call.method.elementsEqual("getSleepData") {
+            getSleepData(call: call, result: result)
+        }
+
         /// Handle getIntervalData
         else if (call.method.elementsEqual("getIntervalData")){
             getIntervalData(call: call, result: result)
@@ -822,6 +827,63 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         }
 
         HKHealthStore().execute(query)
+    }
+
+    func getSleepData(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let arguments = call.arguments as? NSDictionary
+        let startTime = (arguments?["startTime"] as? NSNumber) ?? 0
+        let endTime = (arguments?["endTime"] as? NSNumber) ?? 0
+        let includeManualEntry = (arguments?["includeManualEntry"] as? Bool) ?? true
+
+        let dateFrom = Date(timeIntervalSince1970: startTime.doubleValue / 1000)
+        let dateTo = Date(timeIntervalSince1970: endTime.doubleValue / 1000)
+        let sleepType = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
+
+        var predicate = HKQuery.predicateForSamples(
+            withStart: dateFrom, end: dateTo, options: .strictStartDate)
+        if !includeManualEntry {
+            let manualPredicate = NSPredicate(
+                format: "metadata.%K != YES", HKMetadataKeyWasUserEntered)
+            predicate = NSCompoundPredicate(
+                type: .and, subpredicates: [predicate, manualPredicate])
+        }
+
+        let sortDescriptor = NSSortDescriptor(
+            key: HKSampleSortIdentifierEndDate, ascending: false)
+        let query = HKSampleQuery(
+            sampleType: sleepType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [sortDescriptor]
+        ) { _, samplesOrNil, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    result(FlutterError(
+                        code: "HEALTH_DATA_QUERY_ERROR",
+                        message: error.localizedDescription,
+                        details: nil))
+                }
+                return
+            }
+
+            let samples = samplesOrNil as? [HKCategorySample] ?? []
+            let dictionaries = samples.map { sample -> NSDictionary in
+                return [
+                    "uuid": "\(sample.uuid)",
+                    "value": sample.value,
+                    "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
+                    "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
+                    "source_device_id": sample.device?.localIdentifier ?? "unknown",
+                    "source_id": sample.sourceRevision.source.bundleIdentifier,
+                    "source_name": sample.sourceRevision.source.name,
+                    "is_manual_entry": sample.metadata?[HKMetadataKeyWasUserEntered] != nil
+                ]
+            }
+            DispatchQueue.main.async {
+                result(dictionaries)
+            }
+        }
+        healthStore.execute(query)
     }
 
     @available(iOS 14.0, *)

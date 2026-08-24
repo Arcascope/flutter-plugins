@@ -8,6 +8,7 @@ part of 'health.dart';
 
 HealthDataPoint _$HealthDataPointFromJson(Map<String, dynamic> json) =>
     HealthDataPoint(
+      uuid: json['uuid'] as String?,
       value: HealthValue.fromJson(json['value'] as Map<String, dynamic>),
       type: $enumDecode(_$HealthDataTypeEnumMap, json['type']),
       unit: $enumDecode(_$HealthDataUnitEnumMap, json['unit']),
@@ -45,6 +46,7 @@ Map<String, dynamic> _$HealthDataPointToJson(HealthDataPoint instance) {
     }
   }
 
+  writeNotNull('uuid', instance.uuid);
   writeNotNull('workout_summary', instance.workoutSummary);
   return val;
 }
