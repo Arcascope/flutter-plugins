@@ -655,30 +655,8 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
             case var (samplesCategory as [HKCategorySample]) as Any:
 
-                if dataTypeKey == self.SLEEP_IN_BED {
-                    samplesCategory = samplesCategory.filter { $0.value == 0 }
-                }
-                if dataTypeKey == self.SLEEP_ASLEEP_CORE {
-                    samplesCategory = samplesCategory.filter { $0.value == 3 }
-                }
-                if dataTypeKey == self.SLEEP_ASLEEP_DEEP {
-                    samplesCategory = samplesCategory.filter { $0.value == 4 }
-                }
-                if dataTypeKey == self.SLEEP_ASLEEP_REM {
-                    samplesCategory = samplesCategory.filter { $0.value == 5 }
-                }
-                if dataTypeKey == self.SLEEP_AWAKE {
-                    samplesCategory = samplesCategory.filter { $0.value == 2 }
-                }
-                if dataTypeKey == self.SLEEP_ASLEEP {
-                    samplesCategory = samplesCategory.filter { $0.value == 3  || $0.value == 1 }
-                }
-                if dataTypeKey == self.SLEEP_DEEP {
-                    samplesCategory = samplesCategory.filter { $0.value == 4 }
-                }
-                if dataTypeKey == self.SLEEP_REM {
-                    samplesCategory = samplesCategory.filter { $0.value == 5 }
-                }
+                // Sleep types are routed through getSleepData/_dataSleepQuery on iOS and
+                // never reach here; only headache types are handled by this query.
                 if dataTypeKey == self.HEADACHE_UNSPECIFIED {
                     samplesCategory = samplesCategory.filter { $0.value == 0 }
                 }
@@ -868,16 +846,19 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
             let samples = samplesOrNil as? [HKCategorySample] ?? []
             let dictionaries = samples.map { sample -> NSDictionary in
-                return [
+                let dict: NSMutableDictionary = [
                     "uuid": "\(sample.uuid)",
                     "value": sample.value,
                     "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
                     "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                    "source_device_id": sample.device?.localIdentifier ?? "unknown",
                     "source_id": sample.sourceRevision.source.bundleIdentifier,
                     "source_name": sample.sourceRevision.source.name,
                     "is_manual_entry": sample.metadata?[HKMetadataKeyWasUserEntered] != nil
                 ]
+                if let deviceId = sample.device?.localIdentifier {
+                    dict["source_device_id"] = deviceId
+                }
+                return dict
             }
             DispatchQueue.main.async {
                 result(dictionaries)
