@@ -8,6 +8,13 @@ enum HealthPlatformType { appleHealth, googleFit, googleHealthConnect }
 /// as value.
 @JsonSerializable(fieldRename: FieldRename.snake, includeIfNull: false)
 class HealthDataPoint {
+  /// The platform-assigned identifier for this sample, when available.
+  ///
+  /// HealthKit returns the same UUID when a single sample is read through
+  /// multiple aliases. Keeping it lets callers de-duplicate the underlying
+  /// sample instead of relying on timestamps or source names.
+  String? uuid;
+
   /// The quantity value of the data point
   HealthValue value;
 
@@ -48,6 +55,7 @@ class HealthDataPoint {
   WorkoutSummary? workoutSummary;
 
   HealthDataPoint({
+    this.uuid,
     required this.value,
     required this.type,
     required this.unit,
@@ -74,6 +82,9 @@ class HealthDataPoint {
         type == HealthDataType.SLEEP_DEEP ||
         type == HealthDataType.SLEEP_LIGHT ||
         type == HealthDataType.SLEEP_REM ||
+        type == HealthDataType.SLEEP_ASLEEP_CORE ||
+        type == HealthDataType.SLEEP_ASLEEP_DEEP ||
+        type == HealthDataType.SLEEP_ASLEEP_REM ||
         type == HealthDataType.SLEEP_OUT_OF_BED) {
       value = _convertMinutes();
     }
@@ -129,13 +140,15 @@ class HealthDataPoint {
     }
 
     return HealthDataPoint(
+      uuid: dataPoint['uuid'] as String?,
       value: value,
       type: dataType,
       unit: unit,
       dateFrom: from,
       dateTo: to,
       sourcePlatform: Health().platformType,
-      sourceDeviceId: Health().deviceId,
+      sourceDeviceId:
+          dataPoint['source_device_id'] as String? ?? Health().deviceId,
       sourceId: sourceId,
       sourceName: sourceName,
       isManualEntry: isManualEntry,
@@ -160,6 +173,7 @@ class HealthDataPoint {
   @override
   bool operator ==(Object other) =>
       other is HealthDataPoint &&
+      uuid == other.uuid &&
       value == other.value &&
       unit == other.unit &&
       dateFrom == other.dateFrom &&
@@ -172,6 +186,6 @@ class HealthDataPoint {
       isManualEntry == other.isManualEntry;
 
   @override
-  int get hashCode => Object.hash(value, unit, dateFrom, dateTo, type,
+  int get hashCode => Object.hash(uuid, value, unit, dateFrom, dateTo, type,
       sourcePlatform, sourceDeviceId, sourceId, sourceName);
 }
