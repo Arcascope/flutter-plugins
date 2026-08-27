@@ -29,6 +29,17 @@ class Health {
   final _deviceInfo = DeviceInfoPlugin();
   bool _useHealthConnectIfAvailable = false;
 
+  static const Set<HealthDataType> _iosSleepTypes = {
+    HealthDataType.SLEEP_IN_BED,
+    HealthDataType.SLEEP_ASLEEP,
+    HealthDataType.SLEEP_ASLEEP_CORE,
+    HealthDataType.SLEEP_ASLEEP_DEEP,
+    HealthDataType.SLEEP_ASLEEP_REM,
+    HealthDataType.SLEEP_AWAKE,
+    HealthDataType.SLEEP_DEEP,
+    HealthDataType.SLEEP_REM,
+  };
+
   Health._() {
     _registerFromJsonFunctions();
   }
@@ -635,8 +646,27 @@ class Health {
     Duration? samplingInterval,
   }) async {
     List<HealthDataPoint> dataPoints = [];
+    final remainingTypes = List<HealthDataType>.of(types);
 
-    for (var type in types) {
+    // HealthKit stores every sleep state under one `sleepAnalysis` sample
+    // type. Query it once, then map each category value to one canonical
+    // requested Dart type. Previously each alias triggered its own identical
+    // native query, so SLEEP_DEEP/SLEEP_ASLEEP_DEEP and
+    // SLEEP_REM/SLEEP_ASLEEP_REM returned the same HealthKit samples twice.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final requestedSleepTypes = types.where(_iosSleepTypes.contains).toSet();
+      if (requestedSleepTypes.isNotEmpty) {
+        dataPoints.addAll(await _dataSleepQuery(
+          startTime,
+          endTime,
+          requestedSleepTypes,
+          includeManualEntry,
+        ));
+        remainingTypes.removeWhere(_iosSleepTypes.contains);
+      }
+    }
+
+    for (var type in remainingTypes) {
       final result = await _prepareQuery(
           startTime, endTime, type, includeManualEntry, samplingInterval);
       dataPoints.addAll(result);
@@ -648,6 +678,76 @@ class Health {
     }
 
     return removeDuplicates(dataPoints);
+  }
+
+  Future<List<HealthDataPoint>> _dataSleepQuery(
+    DateTime startTime,
+    DateTime endTime,
+    Set<HealthDataType> requestedTypes,
+    bool includeManualEntry,
+  ) async {
+    final args = <String, dynamic>{
+      'startTime': startTime.millisecondsSinceEpoch,
+      'endTime': endTime.millisecondsSinceEpoch,
+      'includeManualEntry': includeManualEntry,
+    };
+    final fetchedDataPoints = await _channel.invokeMethod('getSleepData', args);
+    if (fetchedDataPoints is! List) return <HealthDataPoint>[];
+
+    final message = <String, dynamic>{
+      'dataPoints': fetchedDataPoints,
+      'requestedTypes': requestedTypes.toList(),
+    };
+    const threshold = 100;
+    if (fetchedDataPoints.length > threshold) {
+      return compute(_parseIosSleepData, message);
+    }
+    return _parseIosSleepData(message);
+  }
+
+  static HealthDataType? _requestedIosSleepType(
+    int value,
+    Set<HealthDataType> requestedTypes,
+  ) =>
+      switch (value) {
+        0 when requestedTypes.contains(HealthDataType.SLEEP_IN_BED) =>
+          HealthDataType.SLEEP_IN_BED,
+        1 when requestedTypes.contains(HealthDataType.SLEEP_ASLEEP) =>
+          HealthDataType.SLEEP_ASLEEP,
+        2 when requestedTypes.contains(HealthDataType.SLEEP_AWAKE) =>
+          HealthDataType.SLEEP_AWAKE,
+        3 when requestedTypes.contains(HealthDataType.SLEEP_ASLEEP_CORE) =>
+          HealthDataType.SLEEP_ASLEEP_CORE,
+        3 when requestedTypes.contains(HealthDataType.SLEEP_ASLEEP) =>
+          HealthDataType.SLEEP_ASLEEP,
+        4 when requestedTypes.contains(HealthDataType.SLEEP_ASLEEP_DEEP) =>
+          HealthDataType.SLEEP_ASLEEP_DEEP,
+        4 when requestedTypes.contains(HealthDataType.SLEEP_DEEP) =>
+          HealthDataType.SLEEP_DEEP,
+        5 when requestedTypes.contains(HealthDataType.SLEEP_ASLEEP_REM) =>
+          HealthDataType.SLEEP_ASLEEP_REM,
+        5 when requestedTypes.contains(HealthDataType.SLEEP_REM) =>
+          HealthDataType.SLEEP_REM,
+        _ => null,
+      };
+
+  static List<HealthDataPoint> _parseIosSleepData(
+    Map<String, dynamic> message,
+  ) {
+    final dataPoints = message['dataPoints'] as List;
+    final requestedTypes =
+        (message['requestedTypes'] as List).cast<HealthDataType>().toSet();
+
+    final result = <HealthDataPoint>[];
+    for (final rawDataPoint in dataPoints) {
+      final dataPoint = Map<String, dynamic>.from(rawDataPoint as Map);
+      final value = (dataPoint['value'] as num).toInt();
+      final type = _requestedIosSleepType(value, requestedTypes);
+      if (type != null) {
+        result.add(HealthDataPoint.fromHealthDataPoint(type, dataPoint));
+      }
+    }
+    return result;
   }
 
   /// Fetch a list of health data points based on [types].
@@ -818,6 +918,31 @@ class Health {
     return <HealthDataPoint>[];
   }
 
+  /// Fetches step records collected by the on-device step sensor (Android
+  /// only), tagged with source name "sensor_step". The sensor is a
+  /// steps-only fallback to Health Connect; callers are expected to merge
+  /// these with Health Connect steps per time bucket rather than sum them.
+  Future<List<HealthDataPoint>> getSensorStepData({
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    final args = <String, dynamic>{
+      'dataTypeKey': HealthDataType.STEPS.name,
+      'startTime': startTime.millisecondsSinceEpoch,
+      'endTime': endTime.millisecondsSinceEpoch,
+    };
+    final fetchedDataPoints =
+        await _channel.invokeMethod('getSensorStepData', args);
+    if (fetchedDataPoints != null && fetchedDataPoints is List) {
+      final msg = <String, dynamic>{
+        "dataType": HealthDataType.STEPS,
+        "dataPoints": fetchedDataPoints,
+      };
+      return _parse(msg);
+    }
+    return <HealthDataPoint>[];
+  }
+
   Future<bool?> doseStepSensorIsAvailable() async {
     final fetchedDataPoints =
         await _channel.invokeMethod<bool?>('doseStepSensorIsAvailable');
@@ -892,8 +1017,21 @@ class Health {
   }
 
   /// Return a list of [HealthDataPoint] based on [points] with no duplicates.
-  List<HealthDataPoint> removeDuplicates(List<HealthDataPoint> points) =>
-      LinkedHashSet.of(points).toList();
+  List<HealthDataPoint> removeDuplicates(List<HealthDataPoint> points) {
+    final seenUuids = <String>{};
+    final pointsWithoutUuids = LinkedHashSet<HealthDataPoint>();
+    final result = <HealthDataPoint>[];
+
+    for (final point in points) {
+      final uuid = point.uuid;
+      if (uuid != null) {
+        if (seenUuids.add(uuid)) result.add(point);
+      } else if (pointsWithoutUuids.add(point)) {
+        result.add(point);
+      }
+    }
+    return result;
+  }
 
   /// Get the total number of steps within a specific time period.
   /// Returns null if not successful.

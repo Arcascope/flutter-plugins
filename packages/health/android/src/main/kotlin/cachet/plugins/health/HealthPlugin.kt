@@ -1315,27 +1315,14 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         }
     }
 
-    /** Get all datapoints of the DataType within the given time range */
+    /** Get all datapoints of the DataType within the given time range.
+     *
+     * The step sensor no longer short-circuits this path: the sensor is a
+     * steps-only fallback, and routing every type through it silently
+     * returned empty lists for sleep, heart rate, etc. Sensor step records
+     * are exposed separately via [getSensorStepData]; callers merge them
+     * with Health Connect steps per time bucket. */
     private fun getData(call: MethodCall, result: Result) {
-
-        if (stepSensorActive) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    fetchCacheData(10)
-                } catch (e: Exception) {
-                    // ignore
-                }
-                withContext(Dispatchers.Main) {
-                    getSensorData(call, result)
-                }
-            }
-            return
-        }
-
-        if (StepCounterService.initiated() && stepSensorActive) {
-            getSensorData(call, result)
-            return
-        }
 
         if (useHealthConnectIfAvailable && healthConnectAvailable) {
             getHCData(call, result)
@@ -1487,44 +1474,70 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         }
     }
 
-    private fun getSensorData(call: MethodCall, result: Result) {
+    /** Returns step records collected by the on-device step sensor
+     * (Local Recording API or the foreground StepCounterService), tagged
+     * with source_name "sensor_step". This is the steps-only fallback feed;
+     * callers combine it with Health Connect steps by coverage.
+     *
+     * The store query runs on IO: SensorStep rows are only pruned by an
+     * explicit clearStepSensorData, so a long-running sensor user's table is
+     * large enough that querying it on the platform thread janks the app.
+     * Every path must reply exactly once — a throw that escaped the coroutine
+     * would leave the Dart caller awaiting a reply that never comes. */
+    private fun getSensorStepData(call: MethodCall, result: Result) {
+        scope.launch(Dispatchers.IO) {
+            if (stepSensorActive) {
+                try {
+                    fetchCacheData(10)
+                } catch (e: Exception) {
+                    // Best-effort refresh; fall through to whatever is stored.
+                }
+            }
+            val payload = try {
+                readSensorSteps(call)
+            } catch (e: Exception) {
+                Log.e("FLUTTER_HEALTH::ERROR", "Sensor step read failed: ${e.message}")
+                null
+            }
+            withContext(Dispatchers.Main) {
+                if (payload == null) {
+                    result.error("SENSOR_STEP_READ_FAILED", "Failed to read sensor steps", null)
+                } else {
+                    result.success(payload)
+                }
+            }
+        }
+    }
+
+    /** Reads sensor step rows in the requested window. Caller must be off
+     * the platform thread. */
+    private fun readSensorSteps(call: MethodCall): List<Map<String, Any?>> {
         val dataType = call.argument<String>("dataTypeKey")!!
+        if (dataType != STEPS) return emptyList()
+
         val startTime = Instant.ofEpochMilli(call.argument<Long>("startTime")!!)
         val endTime = Instant.ofEpochMilli(call.argument<Long>("endTime")!!)
 
-        val healthConnectData = mutableListOf<Map<String, Any?>>()
-
         if (!StepCounterService.initiated()) {
-            StepCounterService.box = MyObjectBox.builder()
-                .androidContext(this)
-                .build();
+            return emptyList()
         }
 
-        if (dataType == STEPS) {
-            val items = StepCounterService.box.boxFor(SensorStep::class.java).query(
-                SensorStep_.startTime.between(
-                    startTime.toEpochMilli(),
-                    endTime.toEpochMilli()
-                )
-            ).build().find()
+        val items = StepCounterService.box.boxFor(SensorStep::class.java).query(
+            SensorStep_.startTime.between(
+                startTime.toEpochMilli(),
+                endTime.toEpochMilli()
+            )
+        ).build().find()
 
-
-            healthConnectData.addAll(items.map {
-                mapOf<String, Any>(
-                    "value" to
-                            it.count,
-                    "date_from" to
-                            it.startTime!!,
-                    "date_to" to
-                            it.endTime!!,
-                    "source_id" to "",
-                    "source_name" to
-                            "sensor_step",
-                )
-            })
+        return items.map {
+            mapOf<String, Any>(
+                "value" to it.count,
+                "date_from" to it.startTime!!,
+                "date_to" to it.endTime!!,
+                "source_id" to "",
+                "source_name" to "sensor_step",
+            )
         }
-
-        Handler(context!!.mainLooper).run { result.success(healthConnectData) }
     }
 
 
@@ -2371,13 +2384,18 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             }
         }
         if (sensorStepData.isNotEmpty()) {
-            updateLastSyncTime(LocalDateTime.now().atZone(ZoneId.systemDefault()))
             Log.d(
                 "HealthPlugin",
-                "Sensor step data received: ${sensorStepData.size} records. Updating query and storing data."
+                "Sensor step data received: ${sensorStepData.size} records. Storing data and updating query."
             )
 
+            // Persist BEFORE advancing the cursor, and advance it only to the
+            // end of the window actually read. lastSyncTime is the sole lower
+            // bound on the next read, so a cursor that moves past unwritten
+            // records — because the put threw, or because steps landed while
+            // Tasks.await was blocked — loses them permanently.
             StepCounterService.box.boxFor(SensorStep::class.java).put(sensorStepData)
+            updateLastSyncTime(queryEndTime)
         } else {
             Log.d(
                 "HealthPlugin",
@@ -2587,6 +2605,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             "writeBloodOxygen" -> writeBloodOxygen(call, result)
             "writeMeal" -> writeMeal(call, result)
             "disconnect" -> disconnect(call, result)
+            "getSensorStepData" -> getSensorStepData(call, result)
             "doseStepSensorIsAvailable" -> doseStepSensorIsAvailable(call, result)
             "isStepSensorRunning" -> isStepSensorRunning(call, result)
             "clearStepSensorData" -> clearStepSensorData(call, result)
@@ -2664,10 +2683,29 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 result.success(false)
                 return
             }
-            val serviceIntent = Intent(activity!!, StepCounterService::class.java)
-            val stopped = activity!!.stopService(serviceIntent)
+            val hasMinPlayServices = GoogleApiAvailability.getInstance()
+                .isGooglePlayServicesAvailable(
+                    context!!,
+                    LocalRecordingClient.LOCAL_RECORDING_CLIENT_MIN_VERSION_CODE
+                )
+            if (hasMinPlayServices == ConnectionResult.SUCCESS) {
+                FitnessLocal.getLocalRecordingClient(activity!!)
+                    .unsubscribe(LocalDataType.TYPE_STEP_COUNT_DELTA)
+                    .addOnSuccessListener {
+                        stepSensorActive = false
+                        result.success(true)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("HealthPlugin", "FitnessLocal unsubscribe failed: $e")
+                        result.success(false)
+                    }
+                return
+            }
 
-            result.success(stopped)
+            val serviceIntent = Intent(activity!!, StepCounterService::class.java)
+            activity!!.stopService(serviceIntent)
+            stepSensorActive = false
+            result.success(true)
         } catch (e: Exception) {
             Log.e("FLUTTER_HEALTH::ERROR", "Failed to stop step sensor service: ${e.message}")
             Log.e("FLUTTER_HEALTH::ERROR", e.stackTrace.toString())
@@ -2686,15 +2724,13 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             activityRecognitionPermissionLauncher!!.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
             return
         } else {
-            startStepSenor()
-            result.success(true)
+            startStepSensor(result)
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun startStepSenor() {
+    private fun startStepSensor(result: Result) {
         try {
-            stepSensorActive = true
             val hasMinPlayServices = GoogleApiAvailability.getInstance()
                 .isGooglePlayServicesAvailable(
                     context!!,
@@ -2705,19 +2741,25 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 localRecordingClient.subscribe(LocalDataType.TYPE_STEP_COUNT_DELTA)
                     .addOnSuccessListener {
                         stepSensorActive = true
-                        Log.d("HealthPlugin", "FitnessLocal subscribed");
+                        Log.d("HealthPlugin", "FitnessLocal subscribed")
+                        result.success(true)
                     }
                     .addOnFailureListener { e ->
                         stepSensorActive = false
-                        Log.e("HealthPlugin", "FitnessLocal subscription failed: $e");
+                        Log.e("HealthPlugin", "FitnessLocal subscription failed: $e")
+                        result.success(false)
                     }
 
             } else {
                 val serviceIntent = Intent(activity!!, StepCounterService::class.java)
                 ContextCompat.startForegroundService(context!!, serviceIntent)
+                stepSensorActive = true
+                result.success(true)
             }
         } catch (e: Exception) {
-            Log.d("HealthPlugin", e.toString());
+            stepSensorActive = false
+            Log.e("HealthPlugin", "Failed to start step sensor: $e")
+            result.success(false)
         }
     }
 
@@ -2746,8 +2788,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { granted ->
                 if (granted.isNotEmpty() && granted.values.first()) {
-                    startStepSenor()
-                    mResult?.success(true)
+                    mResult?.let { startStepSensor(it) }
                     return@registerForActivityResult
                 }
 
